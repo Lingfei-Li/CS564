@@ -1,0 +1,108 @@
+\hypertarget{wl_8cpp}{\section{wl.\-cpp File Reference}
+\label{wl_8cpp}\index{wl.\-cpp@{wl.\-cpp}}
+}
+{\ttfamily \#include $<$iostream$>$}\\*
+{\ttfamily \#include $<$string$>$}\\*
+{\ttfamily \#include $<$sstream$>$}\\*
+{\ttfamily \#include $<$vector$>$}\\*
+{\ttfamily \#include $<$algorithm$>$}\\*
+{\ttfamily \#include $<$fstream$>$}\\*
+{\ttfamily \#include $<$ctype.\-h$>$}\\*
+{\ttfamily \#include \char`\"{}wl.\-h\char`\"{}}\\*
+\subsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+bool \hyperlink{wl_8cpp_ac29d634f90b3808065af48deeabd2296}{is\-Valid\-Char} (char ch)
+\item 
+void \hyperlink{wl_8cpp_a025dcc8ba30ea392d83cbb75ea646393}{tolower} (string \&input)
+\item 
+\hyperlink{classTrieNode}{Trie\-Node} $\ast$ \hyperlink{wl_8cpp_a622817b0d8dbe7e23be72579311766aa}{load} (ifstream \&fin)
+\item 
+int \hyperlink{wl_8cpp_a6695ba8200d6edfb582a0b219fbcd6ee}{locate} (\hyperlink{classTrieNode}{Trie\-Node} $\ast$root, const string \&word, int n)
+\item 
+void \hyperlink{wl_8cpp_a600d203b1ae8724a7330fbaa84741d57}{delete\-Trie} (\hyperlink{classTrieNode}{Trie\-Node} $\ast$root)
+\item 
+\hypertarget{wl_8cpp_ae66f6b31b5ad750f1fe042a706a4e3d4}{int {\bfseries main} ()}\label{wl_8cpp_ae66f6b31b5ad750f1fe042a706a4e3d4}
+
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+\begin{DoxyAuthor}{Author}
+Lingfei Li \href{mailto:lli372@wisc.edu}{\tt lli372@wisc.\-edu} 
+\end{DoxyAuthor}
+\begin{DoxyVersion}{Version}
+1.\-0
+\end{DoxyVersion}
+\hypertarget{wl_8cpp_DESCRIPTION}{}\subsection{D\-E\-S\-C\-R\-I\-P\-T\-I\-O\-N}\label{wl_8cpp_DESCRIPTION}
+Description\-: This is the C\-S564 Database Project 1 -\/ word locator. It reads input from the user, loads a file, and gives the location of words according to commands.
+
+Student Name\-: Lingfei Li U\-W Campus I\-D\-: 9074068637 enamil\-: \href{mailto:lli372@wisc.edu}{\tt lli372@wisc.\-edu} 
+
+\subsection{Function Documentation}
+\hypertarget{wl_8cpp_a600d203b1ae8724a7330fbaa84741d57}{\index{wl.\-cpp@{wl.\-cpp}!delete\-Trie@{delete\-Trie}}
+\index{delete\-Trie@{delete\-Trie}!wl.cpp@{wl.\-cpp}}
+\subsubsection[{delete\-Trie}]{\setlength{\rightskip}{0pt plus 5cm}void delete\-Trie (
+\begin{DoxyParamCaption}
+\item[{{\bf Trie\-Node} $\ast$}]{root}
+\end{DoxyParamCaption}
+)}}\label{wl_8cpp_a600d203b1ae8724a7330fbaa84741d57}
+Free the trie tree memory space 
+\begin{DoxyParams}{Parameters}
+{\em root} & of the trie \\
+\hline
+\end{DoxyParams}
+\hypertarget{wl_8cpp_ac29d634f90b3808065af48deeabd2296}{\index{wl.\-cpp@{wl.\-cpp}!is\-Valid\-Char@{is\-Valid\-Char}}
+\index{is\-Valid\-Char@{is\-Valid\-Char}!wl.cpp@{wl.\-cpp}}
+\subsubsection[{is\-Valid\-Char}]{\setlength{\rightskip}{0pt plus 5cm}bool is\-Valid\-Char (
+\begin{DoxyParamCaption}
+\item[{char}]{ch}
+\end{DoxyParamCaption}
+)}}\label{wl_8cpp_ac29d634f90b3808065af48deeabd2296}
+Determine if a character is valid for a word 
+\begin{DoxyParams}{Parameters}
+{\em character} & to be examined \\
+\hline
+\end{DoxyParams}
+\hypertarget{wl_8cpp_a622817b0d8dbe7e23be72579311766aa}{\index{wl.\-cpp@{wl.\-cpp}!load@{load}}
+\index{load@{load}!wl.cpp@{wl.\-cpp}}
+\subsubsection[{load}]{\setlength{\rightskip}{0pt plus 5cm}{\bf Trie\-Node}$\ast$ load (
+\begin{DoxyParamCaption}
+\item[{ifstream \&}]{fin}
+\end{DoxyParamCaption}
+)}}\label{wl_8cpp_a622817b0d8dbe7e23be72579311766aa}
+Load the file content from the file stream 
+\begin{DoxyParams}{Parameters}
+{\em in-\/filestream} & \\
+\hline
+\end{DoxyParams}
+\hypertarget{wl_8cpp_a6695ba8200d6edfb582a0b219fbcd6ee}{\index{wl.\-cpp@{wl.\-cpp}!locate@{locate}}
+\index{locate@{locate}!wl.cpp@{wl.\-cpp}}
+\subsubsection[{locate}]{\setlength{\rightskip}{0pt plus 5cm}int locate (
+\begin{DoxyParamCaption}
+\item[{{\bf Trie\-Node} $\ast$}]{root, }
+\item[{const string \&}]{word, }
+\item[{int}]{n}
+\end{DoxyParamCaption}
+)}}\label{wl_8cpp_a6695ba8200d6edfb582a0b219fbcd6ee}
+Locate the n-\/th occurrence of the given word in the trie 
+\begin{DoxyParams}{Parameters}
+{\em root} & of trie \\
+\hline
+{\em word} & to be located \\
+\hline
+{\em n-\/th} & occurrence \\
+\hline
+\end{DoxyParams}
+\hypertarget{wl_8cpp_a025dcc8ba30ea392d83cbb75ea646393}{\index{wl.\-cpp@{wl.\-cpp}!tolower@{tolower}}
+\index{tolower@{tolower}!wl.cpp@{wl.\-cpp}}
+\subsubsection[{tolower}]{\setlength{\rightskip}{0pt plus 5cm}void tolower (
+\begin{DoxyParamCaption}
+\item[{string \&}]{input}
+\end{DoxyParamCaption}
+)}}\label{wl_8cpp_a025dcc8ba30ea392d83cbb75ea646393}
+Transform all characters in a string to lower case 
+\begin{DoxyParams}{Parameters}
+{\em input} & string \\
+\hline
+\end{DoxyParams}

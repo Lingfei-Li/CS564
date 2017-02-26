@@ -1,0 +1,9 @@
+﻿  wl.cpp
+c:\users\lingfei\documents\visual studio 2015\projects\cs564\p1\wl.cpp(52): warning C4018: “<”: 有符号/无符号不匹配
+c:\users\lingfei\documents\visual studio 2015\projects\cs564\p1\wl.cpp(53): warning C4244: “初始化”: 从“int”转换到“char”，可能丢失数据
+c:\users\lingfei\documents\visual studio 2015\projects\cs564\p1\wl.cpp(84): warning C4018: “<”: 有符号/无符号不匹配
+c:\users\lingfei\documents\visual studio 2015\projects\cs564\p1\wl.cpp(91): warning C4018: “>=”: 有符号/无符号不匹配
+c:\users\lingfei\documents\visual studio 2015\projects\cs564\p1\wl.cpp(100): warning C4018: “<”: 有符号/无符号不匹配
+c:\users\lingfei\documents\visual studio 2015\projects\cs564\p1\wl.cpp(101): warning C4244: “=”: 从“int”转换到“char”，可能丢失数据
+  P1.vcxproj -> C:\Users\Lingfei\documents\visual studio 2015\Projects\CS564\Debug\P1.exe
+  P1.vcxproj -> C:\Users\Lingfei\documents\visual studio 2015\Projects\CS564\Debug\P1.pdb (Full PDB)
