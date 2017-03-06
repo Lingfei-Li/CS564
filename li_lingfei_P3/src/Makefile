@@ -45,6 +45,10 @@ t:
 	./out.mytest
 	rm relation_test*
 
+tt:
+	rm relation_test*
+	./out.mytest
+
 t2:
 	./badgerdb_main 2
 
@@ -55,6 +59,14 @@ clean:
 	#rm -rf $(OBJ)/exceptions/*.o
 	rm -rf $(OBJ)/*.o
 	#rm -rf $(LIB)/*
+	#rm -rf exceptions/*.o
+	rm -f badgerdb_main
+	rm -f out.mytest
+
+cleanall:
+	#rm -rf $(OBJ)/exceptions/*.o
+	rm -rf $(OBJ)/*.o
+	rm -rf $(LIB)/*
 	#rm -rf exceptions/*.o
 	rm -f badgerdb_main
 

@@ -15,6 +15,7 @@
 #include "exceptions/end_of_file_exception.h"
 #include <vector>
 #include <fstream>
+#include <iostream>
 
 using namespace badgerdb;
 
@@ -43,25 +44,68 @@ int main() {
 
     myfile.close();
 
-    for(size_t i = 0; i < input.size(); i ++) {
-
-        int key = input[i];
+    for(int i = 0; i < input[0]; i ++) {
+        int key = i;
 
         RecordId rid;
         rid.page_number = i;
         rid.slot_number = i;
 
         index.insertEntry((void*)&key, rid);
-
-        char ch;
-        std::cout<<"Paused\n";
-        std::cin>>ch;
     }
 
-    index.dumpLeaf();
-    index.dumpLevel(0);
+    index.dumpAllLevels();
 
+    char cmd;
+    int arg;
+    while(std::cin>>cmd) {
+        if(cmd == 'i') {
+            std::cin>>arg;
+            int key = arg;
+            RecordId rid;
+            rid.page_number = arg;
+            rid.slot_number = arg;
+            index.insertEntry((void*)&key, rid);
+        }
+        else if(cmd == 'd') {
+            std::cin>>arg;
+//            int key = arg;
+//            index.deleteEntry((void*)&key);
+        }
+        else if(cmd == 'p') {
+
+        }
+        else if(cmd == 'q') {
+            return 0;
+        }
+        else {
+
+        }
+        index.dumpAllLevels();
+//        bufMgr->printSelfNonNull();
+//        bufMgr->printSelf();
+    }
+
+
+    int low = 10, high = 20;
+    index.startScan((void*)&low, GTE, (void*)&high, LTE);
+    printf("Starting scan\n");
+    try {
+        RecordId rid;
+        rid.page_number = 1;
+        while(rid.page_number != 0) {
+            index.scanNext(rid);
+            printf("rid.pageNo: %d slotNo: %d\n", rid.page_number, rid.slot_number);
+        }
+    } catch(IndexScanCompletedException e) {
+    }
+    index.endScan();
+
+
+//    index.dumpAllLevels();
+//    bufMgr->printSelfPinned();
 //    bufMgr->printSelfNonNull();
+
 
     delete bufMgr;
 

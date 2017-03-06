@@ -198,12 +198,17 @@ void BufMgr::disposePage(File* file, const PageId pageNo)
 	//Deallocate from file altogether
   //See if it is in the buffer pool
   FrameId frameNo = 0;
-  hashTable->lookup(file, pageNo, frameNo);
+  try
+  {
+      hashTable->lookup(file, pageNo, frameNo);
+      // clear the page
+      bufDescTable[frameNo].Clear();
+      hashTable->remove(file, pageNo);
+  }
+  catch(HashNotFoundException e) //not in the buffer pool, must allocate a new page
+  {
+  }
 
-	// clear the page
-	bufDescTable[frameNo].Clear();
-
-	hashTable->remove(file, pageNo);
 
   // deallocate it in the file	
   file->deletePage(pageNo);
@@ -270,6 +275,30 @@ void BufMgr::printSelfNonNull(void)
   }
 
   std::cout << "Total Number of Valid Frames:" << validFrames << "\n";
+  std::cout << "=================================\n\n";
+}
+
+void BufMgr::printSelfPinned(void) 
+{
+  std::cout << "\n========== Buffer Pool ==========\n";
+  BufDesc* tmpbuf;
+  int validFrames = 0;
+  
+  for (std::uint32_t i = 0; i < numBufs; i++) {
+    tmpbuf = &(bufDescTable[i]);
+    if(tmpbuf->file == NULL || tmpbuf->pinCnt == 0) {
+        continue;
+    }
+    std::cout << "FrameNo:" << i << " ";
+    tmpbuf->Print();
+
+  	if (tmpbuf->valid == true) {
+    	validFrames++;
+    }
+
+  }
+
+  std::cout << "Total Number of Pinned Frames:" << validFrames << "\n";
   std::cout << "=================================\n\n";
 }
 

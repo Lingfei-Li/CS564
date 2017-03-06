@@ -281,6 +281,11 @@ class BufMgr
   void  printSelfNonNull();
 
 	/**
+   * Print pinned
+	 */
+  void  printSelfPinned();
+
+	/**
    * Get buffer pool usage statistics
 	 */
   BufStats & getBufStats()

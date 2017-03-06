@@ -36,6 +36,7 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
 		const Datatype attrType)
 {
 
+    /*
     printf("BTreeIndex: constructor invoked\n");
 
     //Init buffer manager, attr type, attr offset
@@ -108,22 +109,21 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
 
         //Build the root node as leaf to init the tree structure
         if(attrType == INTEGER) {
-            LeafNode<int>* rootNode = (LeafNode<int>*)rootPage;
+            //cast the root as a new leaf node
+            struct LeafNodeInt* rootNode = (struct LeafNodeInt*)rootPage;
+
+            //Init the new node
+            for(int i = 0; i < this->leafOccupancy; i ++ ){
+                rootNode->keyArray[i] = 0;
+            }
             rootNode->rightSibPageNo = 0;
-            rootNode->leftSibPageNo = 0;
             rootNode->usage = 0;
 
-        } else if(attrType == DOUBLE){
-            LeafNode<double>* rootNode = (LeafNode<double>*)rootPage;
-            rootNode->rightSibPageNo = 0;
-            rootNode->leftSibPageNo = 0;
-            rootNode->usage = 0;
         } else {
-            LeafNode<char*>* rootNode = (LeafNode<char*>*)rootPage;
-            rootNode->rightSibPageNo = 0;
-            rootNode->leftSibPageNo = 0;
-            rootNode->usage = 0;
+            printf("Btree constructor for double and string not implemented yet\n");
+            return;
         }
+
         //Release meta info page
         this->bufMgr->unPinPage(this->file, metaInfoPageNo, true);
         //Release root node
@@ -133,6 +133,7 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
 //    printMeta();
 
     printf("BTreeIndex: constructor finished\n");
+    */
 }
 
 
@@ -143,53 +144,233 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
 BTreeIndex::~BTreeIndex()
 { }
 
+
+// -----------------------------------------------------------------------------
+// Helper function. Insert an entry to a non-full leaf node. 
+// Shift elements as needed, but no splitting will happen
+// -----------------------------------------------------------------------------
+const void BTreeIndex::insertEntryLeafNotFull(const void* key, const RecordId rid, void* node) {
+    /*
+    if(this->attributeType == INTEGER) {
+        struct LeafNodeInt* curNode = (struct LeafNodeInt*)node;
+
+        assert(curNode->usage < this->nodeOccupancy);
+
+        int keyVal = *(int*)key;
+        int i = 0;
+        for(i = 0; i < curNode->usage + 1; i ++ ){
+            if(i == curNode->usage || keyVal < curNode->keyArray[i]) {
+                //Rightmost position is reached (including when there's no key in the node)
+                // or the suitable insertion position is found
+                break;
+            }
+        }
+
+        //Shift all elements after this position
+        for(int j = curNode->usage; j > i; j -- ){
+            curNode->keyArray[j] = curNode->keyArray[j-1];
+            curNode->ridArray[j] = curNode->ridArray[j-1];
+        }
+
+        curNode->keyArray[i] = keyVal;
+        curNode->ridArray[i] = rid;
+
+        curNode->usage ++;
+    }
+    else {
+        printf("ERROR: insertEntryNonLeafNotFull not implemented for non-int type\n");
+    }
+    */
+}
+
+// -----------------------------------------------------------------------------
+// Helper function. Insert an entry to a non-full internal node. 
+// Shift elements as needed, but no splitting will happen
+// The new pageNo will always be on the right-hand-side of the new key
+// -----------------------------------------------------------------------------
+const void BTreeIndex::insertEntryNonLeafNotFull(const void* key, const PageId pageNo, void* node) {
+    /*
+    if(this->attributeType == INTEGER) {
+        struct NonLeafNodeInt* curNode = (struct NonLeafNodeInt*)node;
+
+        assert(curNode->usage < this->nodeOccupancy);
+
+        int keyVal = *(int*)key;
+        int i = 0;
+        for(i = 0; i < curNode->usage + 1; i ++ ){
+            if(i == curNode->usage || keyVal < curNode->keyArray[i]) {
+                //Rightmost position is reached (including when there's no key in the node)
+                // or the suitable insertion position is found
+                break;
+            }
+        }
+
+        //Shift all elements after this position
+        for(int j = curNode->usage; j > i; j -- ){
+            curNode->keyArray[j] = curNode->keyArray[j-1];
+            curNode->pageNoArray[j+1] = curNode->pageNoArray[(j+1) -1];   //shifting the rhs ptr of the key
+        }
+        curNode->keyArray[i] = keyVal;
+        curNode->pageNoArray[i+1] = pageNo;    //insert the ptr to rhs
+
+        curNode->usage ++;
+    }
+    else {
+        printf("ERROR: insertEntryNonLeafNotFull not implemented for non-int type\n");
+    }
+    */
+}
+
 // -----------------------------------------------------------------------------
 // BTreeIndex::insertEntry
 // -----------------------------------------------------------------------------
 const void BTreeIndex::insertEntry(const void *key, const RecordId rid)
 {
+
+    PageId upPage = 0;
+    void* upKey = NULL;
     if(this->attributeType == INTEGER) {
-        this->insertEntry_template<int>(*(int*)key, rid);
+        PageKeyPair<int>* ret= (PageKeyPair<int>*)this->insertEntry1(key, rid, this->rootPageNum, 0);
+        upPage = ret->pageNo;
+        upKey = (void*)&ret->key;
     }
     else if(this->attributeType == DOUBLE) {
-        this->insertEntry_template<double>(*(double*)key, rid);
+        PageKeyPair<double>* ret = (PageKeyPair<double>*)this->insertEntry1(key, rid, this->rootPageNum, 0);
+        upPage = ret->pageNo;
+        upKey = (void*)&ret->key;
     }
     else {
-        this->insertEntry_template<char*>((char*)key, rid);
+        PageKeyPair<char*>* ret = (PageKeyPair<char*>*)this->insertEntry1(key, rid, this->rootPageNum, 0);
+        upPage = ret->pageNo;
+        upKey = (void*)&ret->key;
     }
-}
+    printf("%d %x\n", upPage, upKey);
 
-template<class T>
-const void BTreeIndex::createNewRoot(PageKeyPair<T>& ret) 
-{
+    /*
+    //Create new root
     if(ret.pageNo != 0) {
         PageId rootPageNo;
         Page* rootPage;
         this->bufMgr->allocPage(this->file, rootPageNo, rootPage);
-        NonLeafNode<T>* rootNode = (NonLeafNode<T>*)rootPage;
+        struct NonLeafNodeInt* rootNode = (struct NonLeafNodeInt*)rootPage;
 
-
-        rootNode->pageKeyPairArray[0] = PageKeyPair<T>(this->rootPageNum, 0);
-        rootNode->usage = 0;
-
+        rootNode->pageNoArray[0] = this->rootPageNum;
         this->rootPageNum = rootPageNo;
 
-        this->insertEntryInNonLeaf<T>(ret.key, ret.pageNo, rootNode);
+        insertEntryNonLeafNotFull((void*)&ret.key, ret.pageNo, (void*)rootNode);
 
         this->bufMgr->unPinPage(this->file, rootPageNo, true);
 
         this->height ++;
     }
+    */
 }
 
 
-template<class T>
-const void BTreeIndex::insertEntry_template(T key, const RecordId rid) 
+const void* BTreeIndex::insertEntry1(const void *key, const RecordId rid, PageId curPageNo, int level) 
 {
-    PageKeyPair<T> ret = this->insertEntry_helper(key, rid, this->rootPageNum, 0);
-    this->createNewRoot<T>(ret);
-}
+    /*
 
+    Page* curPage = NULL;
+    this->bufMgr->readPage(this->file, curPageNo, curPage);
+
+    int keyVal = *(int*)key;
+
+    PageKeyPair<int> ret;
+    ret.set(0, 0);
+
+    //Find the correct position
+    //Call itself to recursively insert
+    
+    if(level == this->height){
+        //Base case: Reached leaf
+        struct LeafNodeInt* node = (struct LeafNodeInt*)curPage;
+
+        insertEntryLeafNotFull(key, rid, (void*)node);
+
+        if(node->usage == this->leafOccupancy) {
+            PageId newPageNo;
+            Page* newPage;
+            this->bufMgr->allocPage(this->file, newPageNo, newPage);
+            struct LeafNodeInt* newNode = (struct LeafNodeInt*)newPage;
+
+            //redistribute
+            int cnt = 0;
+            for(int i = this->leafOccupancy/2; i < this->leafOccupancy; i ++) {
+                //newNode is on the rhs, curNode is on the lhs
+                newNode->keyArray[cnt] = node->keyArray[i];
+                newNode->ridArray[cnt] = node->ridArray[i];
+                cnt ++;
+            }
+
+            //set usage
+            newNode->usage = cnt;
+            node->usage = this->leafOccupancy - cnt;
+
+            //set sib pointers. note: order is important
+            newNode->rightSibPageNo = node->rightSibPageNo;
+            node->rightSibPageNo = newPageNo;
+
+            //copy up
+            ret.set(newPageNo, newNode->keyArray[0]);
+
+            //Jobs with the new node is done. Release the new node
+            this->bufMgr->unPinPage(this->file, newPageNo, true);
+        }
+    }
+    else {
+        struct NonLeafNodeInt* node = (struct NonLeafNodeInt*)curPage;
+
+        int i;
+        for(i = 0; i < node->usage + 1; i ++ ){
+            if(i == node->usage || keyVal < node->keyArray[i]) {
+                //Rightmost position is reached (including when there's no key in the node)
+                // or the suitable insertion position is found
+                break;
+            }
+        }
+
+        PageKeyPair<int> pushUp = this->insertEntry1(key, rid, node->pageNoArray[i], level + 1);
+        if(pushUp.pageNo != 0) {
+
+            insertEntryNonLeafNotFull((void*)&pushUp.key, pushUp.pageNo, (void*)node);
+
+            if(node->usage == this->nodeOccupancy) {
+                PageId newPageNo;
+                Page* newPage;
+                this->bufMgr->allocPage(this->file, newPageNo, newPage);
+                struct NonLeafNodeInt* newNode = (struct NonLeafNodeInt*)newPage;
+
+                //push up
+                ret.set(newPageNo, node->keyArray[this->nodeOccupancy/2]);
+
+                //redistribute
+                int cnt = 0;
+                for(int i = this->nodeOccupancy/2+1; i < this->nodeOccupancy; i ++) {
+                    newNode->keyArray[cnt] = node->keyArray[i];
+                    newNode->pageNoArray[cnt] = node->pageNoArray[i];
+                    cnt ++;
+                }
+                newNode->pageNoArray[cnt] = node->pageNoArray[this->nodeOccupancy];
+
+                //set usage
+                newNode->usage = cnt;
+                node->usage = this->nodeOccupancy - cnt - 1;
+
+                //Jobs with the new node is done. Release the new node
+                this->bufMgr->unPinPage(this->file, newPageNo, true);
+            }
+        }
+    }
+    
+    //Get the return value: a <key, pageno> pair to be inserted into itself
+
+    //Insert the pair, and push up if necessary
+
+    this->bufMgr->unPinPage(this->file, curPageNo, true);
+    return ret;
+    */
+}
 
 
 // -----------------------------------------------------------------------------
@@ -345,6 +526,9 @@ const void BTreeIndex::endScan()
 	this->scanExecuting = true;
 }
 
+/*
+ *
+
 // -----------------------------------------------------------------------------
 // BTreeIndex::printMeta
 // -----------------------------------------------------------------------------
@@ -369,10 +553,6 @@ const void BTreeIndex::printMeta()
 
     std::cout<<"=====================================\n\n";
 }
-
-
-/*
- *
 
 // -----------------------------------------------------------------------------
 // BTreeIndex::printNode
@@ -413,12 +593,14 @@ const void BTreeIndex::printNode(LeafNodeInt* node, PageId pageNo)
 // BTreeIndex::dumpAllLevels
 // -----------------------------------------------------------------------------
 
-*/
 const void BTreeIndex::dumpAllLevels()  
 {
     for(int i = 0; i <= this->height; i ++) {
         printf("Dumping Level %d\n", i);
-        dumpLevel(i);
+        if(i != this->height)
+            dumpLevel(i);
+        else
+            dumpLeaf();
     }
 }
 
@@ -428,33 +610,10 @@ const void BTreeIndex::dumpAllLevels()
 
 const void BTreeIndex::dumpLevel(int dumpLevel)  
 {
-    if(dumpLevel == this->height) {
-        if(this->attributeType == INTEGER) {
-            dumpLeaf<int>();
-        }
-        else if(this->attributeType == DOUBLE) {
-            dumpLeaf<double>();
-        }
-        else {
-            dumpLeaf<char[10]>();
-        }
-    }
-    else {
-        if(this->attributeType == INTEGER) {
-            dumpLevel1<int>(this->rootPageNum, 0, dumpLevel);
-        }
-        else if(this->attributeType == DOUBLE) {
-            dumpLevel1<double>(this->rootPageNum, 0, dumpLevel);
-        }
-        else {
-            dumpLevel1<char[10]>(this->rootPageNum, 0, dumpLevel);
-        }
-    }
-
+    dumpLevel1(this->rootPageNum, 0, dumpLevel);
 }
 
 
-template<class T>
 const void BTreeIndex::dumpLevel1(PageId curPageNo, int curLevel, int dumpLevel) 
 {
     if(curLevel > dumpLevel) {
@@ -464,46 +623,45 @@ const void BTreeIndex::dumpLevel1(PageId curPageNo, int curLevel, int dumpLevel)
 
     if(curPageNo != 0) {
         this->bufMgr->readPage(this->file, curPageNo, curPage);
-        NonLeafNode<T>* curNode = (NonLeafNode<T>*)curPage;
+        struct NonLeafNodeInt* curNode = (struct NonLeafNodeInt*)curPage;
         if(curLevel == dumpLevel) {
             printf("%d: ", curPageNo);
             for(int i = 0; i < curNode->usage; i ++) {
-                printf("[%d] %d ", curNode->pageKeyPairArray[i].pageNo, curNode->pageKeyPairArray[i].key);
+                printf("[%d] %d ", curNode->pageNoArray[i], curNode->keyArray[i]);
             }
-            printf("[%d]\n", curNode->pageKeyPairArray[curNode->usage].pageNo);
+            printf("[%d]\n", curNode->pageNoArray[curNode->usage]);
         }
         else {
             for(int i = 0; i < curNode->usage + 1; i ++) {
-                dumpLevel1<T>(curNode->pageKeyPairArray[i].pageNo, curLevel + 1, dumpLevel);
+                dumpLevel1(curNode->pageNoArray[i], curLevel + 1, dumpLevel);
             }
         }
         this->bufMgr->unPinPage(this->file, curPageNo, false);
     }
 }
 
-
 // -----------------------------------------------------------------------------
 // BTreeIndex::dumpLeaf
 // -----------------------------------------------------------------------------
-template<class T>
+
 const void BTreeIndex::dumpLeaf() 
 {
     PageId curPageNo = this->rootPageNum;
     Page* curPage = NULL;
     for(int i = 0; i < this->height; i ++) {
         this->bufMgr->readPage(this->file, curPageNo, curPage);
-        NonLeafNode<T>* curNode = (NonLeafNode<T>*)curPage;
+        struct NonLeafNodeInt* curNode = (struct NonLeafNodeInt*)curPage;
         PageId tmp = curPageNo;
-        curPageNo = curNode->pageKeyPairArray[0].pageNo;
+        curPageNo = curNode->pageNoArray[0];
         this->bufMgr->unPinPage(this->file, tmp, false);
     }
 
     while(curPageNo != 0) {
         this->bufMgr->readPage(this->file, curPageNo, curPage);
-        LeafNode<T>* curNode = (LeafNode<T>*)curPage;
-        printf("%d<-%d: ", curNode->leftSibPageNo, curPageNo);
+        struct LeafNodeInt* curNode = (struct LeafNodeInt*)curPage;
+        printf("%d: ", curPageNo);
         for(int i = 0; i < curNode->usage; i ++) {
-            printf("%d ", curNode->ridKeyPairArray[i].key);
+            printf("%d ", curNode->keyArray[i]);
         }
         printf("\n");
         PageId tmp = curPageNo;
@@ -511,6 +669,7 @@ const void BTreeIndex::dumpLeaf()
         this->bufMgr->unPinPage(this->file, tmp, false);
     }
 }
+*/
 
 
 }
