@@ -14,6 +14,7 @@
 #include "exceptions/scan_not_initialized_exception.h"
 #include "exceptions/index_scan_completed_exception.h"
 #include "exceptions/file_not_found_exception.h"
+#include "exceptions/invalid_page_exception.h"
 #include "exceptions/end_of_file_exception.h"
 
 #include <string>
@@ -371,49 +372,9 @@ const void BTreeIndex::printMeta()
 }
 
 
-/*
- *
-
-// -----------------------------------------------------------------------------
-// BTreeIndex::printNode
-// -----------------------------------------------------------------------------
-//
-const void BTreeIndex::printNode(NonLeafNodeInt* node, PageId pageNo)
-{
-    std::cout<<"\n========== Node "<<pageNo<<" ==========\n";
-    std::cout<<"Occupancy: "<<INTARRAYNONLEAFSIZE<<std::endl;
-    std::cout<<"Usage: "<<node->usage<<std::endl;
-    std::cout<<"Content: "<<std::endl;
-    for(int i = 0; i < node->usage; i ++) {
-        std::cout<<" ["<<node->pageNoArray[i]<<"] ";
-        std::cout<<node->keyArray[i];
-    }
-    std::cout<<" ["<<node->pageNoArray[node->usage]<<"]";
-    std::cout<<std::endl;
-    std::cout<<"===============================\n\n";
-}
-
-
-const void BTreeIndex::printNode(LeafNodeInt* node, PageId pageNo)
-{
-    std::cout<<"\n========== Node "<<pageNo<<" ==========\n";
-    std::cout<<"Occupancy: "<<INTARRAYLEAFSIZE<<std::endl;
-    std::cout<<"Usage: "<<node->usage<<std::endl;
-    std::cout<<"SibPage: "<<node->rightSibPageNo<<std::endl;
-
-    std::cout<<"Keys: "<<std::endl;
-    for(int i = 0; i < node->usage; i ++) {
-        std::cout<<node->keyArray[i]<<" ";
-    }
-    std::cout<<std::endl;
-    std::cout<<"===============================\n\n";
-}
-
 // -----------------------------------------------------------------------------
 // BTreeIndex::dumpAllLevels
 // -----------------------------------------------------------------------------
-
-*/
 const void BTreeIndex::dumpAllLevels()  
 {
     for(int i = 0; i <= this->height; i ++) {
@@ -466,11 +427,11 @@ const void BTreeIndex::dumpLevel1(PageId curPageNo, int curLevel, int dumpLevel)
         this->bufMgr->readPage(this->file, curPageNo, curPage);
         NonLeafNode<T>* curNode = (NonLeafNode<T>*)curPage;
         if(curLevel == dumpLevel) {
-            printf("%d: ", curPageNo);
+            std::cout<<curPageNo<<" usage "<<curNode->usage<<": ";
             for(int i = 0; i < curNode->usage; i ++) {
-                printf("[%d] %d ", curNode->pageKeyPairArray[i].pageNo, curNode->pageKeyPairArray[i].key);
+                std::cout<<"["<<curNode->pageKeyPairArray[i].pageNo<<"] "<<curNode->pageKeyPairArray[i].key<<" ";
             }
-            printf("[%d]\n", curNode->pageKeyPairArray[curNode->usage].pageNo);
+            std::cout<<"["<<curNode->pageKeyPairArray[curNode->usage].pageNo<<"]\n";
         }
         else {
             for(int i = 0; i < curNode->usage + 1; i ++) {
@@ -501,15 +462,82 @@ const void BTreeIndex::dumpLeaf()
     while(curPageNo != 0) {
         this->bufMgr->readPage(this->file, curPageNo, curPage);
         LeafNode<T>* curNode = (LeafNode<T>*)curPage;
-        printf("%d<-%d: ", curNode->leftSibPageNo, curPageNo);
+        std::cout<<curNode->leftSibPageNo<<"<-"<<curPageNo<<": ";
         for(int i = 0; i < curNode->usage; i ++) {
-            printf("%d ", curNode->ridKeyPairArray[i].key);
+            std::cout<<curNode->ridKeyPairArray[i].key<<" ";
         }
-        printf("\n");
+        std::cout<<" u:"<<curNode->usage<<"";
+        std::cout<<"\n";
         PageId tmp = curPageNo;
         curPageNo = curNode->rightSibPageNo;
         this->bufMgr->unPinPage(this->file, tmp, false);
     }
+}
+
+
+
+
+const void BTreeIndex::deleteEntry(const void *key)
+{
+
+    std::vector<PageId> disposePageNo = std::vector<PageId>();
+
+    if(this->attributeType == INTEGER) {
+        this->deleteEntry_helper<int>(*(int*)key, this->rootPageNum, NULL, -1, 0, disposePageNo);
+    }
+    else if(this->attributeType == DOUBLE) {
+        this->deleteEntry_helper<double>(*(double*)key, this->rootPageNum, NULL, -1, 0, disposePageNo);
+    }
+    else {
+        this->deleteEntry_helper<char*>((char*)key, this->rootPageNum, NULL, -1, 0, disposePageNo);
+    }
+
+//    this->bufMgr->flushFile(this->file);
+    for(size_t i = 0; i < disposePageNo.size(); i ++) {
+        try{
+            this->bufMgr->disposePage(this->file, disposePageNo[i]);
+        }catch(InvalidPageException e) {
+
+        }
+    }
+
+}
+
+
+const bool BTreeIndex::validate() {
+    std::cout<<"\n========= Validation Result ==========\n";
+    std::stack<PageId> pinnedPage;
+
+    try {
+        if(this->attributeType == INTEGER) {
+            this->validate_helper<int>(this->rootPageNum, 0, pinnedPage);
+        }
+        else if(this->attributeType == DOUBLE) {
+            this->validate_helper<double>(this->rootPageNum, 0, pinnedPage);
+        }
+        else {
+            this->validate_helper<char*>(this->rootPageNum, 0, pinnedPage);
+        }
+        if(this->bufMgr->pinnedCnt() != 0) {
+            printf("Buffer manager is not clean:\n");
+            this->bufMgr->printSelfPinned();
+            throw ValidationFailedException();
+        }
+    }
+    catch(ValidationFailedException e) {
+        while(pinnedPage.empty() == false) {
+            PageId pageNo = pinnedPage.top();
+            this->bufMgr->unPinPage(this->file, pageNo, false);
+            pinnedPage.pop();
+        }
+        printf("Validation failed\n");
+        std::cout<<"======================================\n\n";
+        return false;
+    }
+
+    printf("Validation passed\n");
+    std::cout<<"======================================\n\n";
+    return true;
 }
 
 

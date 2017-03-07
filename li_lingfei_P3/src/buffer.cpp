@@ -302,4 +302,26 @@ void BufMgr::printSelfPinned(void)
   std::cout << "=================================\n\n";
 }
 
+
+int BufMgr::pinnedCnt(void) 
+{
+  BufDesc* tmpbuf;
+  int validFrames = 0;
+  for (std::uint32_t i = 0; i < numBufs; i++) {
+    tmpbuf = &(bufDescTable[i]);
+    if(tmpbuf->file == NULL || tmpbuf->pinCnt == 0) {
+        continue;
+    }
+  	if (tmpbuf->valid == true) {
+    	validFrames++;
+    }
+  }
+  return validFrames;
+  return 0;
+}
+
+
+
+
+
 }

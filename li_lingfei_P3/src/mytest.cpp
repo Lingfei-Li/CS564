@@ -44,18 +44,27 @@ int main() {
 
     myfile.close();
 
+//    for(int i = input[0]; i >= 0; i --) {
     for(int i = 0; i < input[0]; i ++) {
-        int key = i;
+        int key = i*2;
 
         RecordId rid;
-        rid.page_number = i;
-        rid.slot_number = i;
+        rid.page_number = key;
+        rid.slot_number = key;
 
         index.insertEntry((void*)&key, rid);
     }
 
-    index.dumpAllLevels();
+    /*
+    for(int i = 0; i < input[0]-5; i ++) {
+        int key = i;
+        printf("deleting %d...\n", key);
+        index.deleteEntry((void*)&key);
+        index.dumpAllLevels();
+    }
+    */
 
+    index.dumpAllLevels();
     char cmd;
     int arg;
     while(std::cin>>cmd) {
@@ -69,8 +78,8 @@ int main() {
         }
         else if(cmd == 'd') {
             std::cin>>arg;
-//            int key = arg;
-//            index.deleteEntry((void*)&key);
+            int key = arg;
+            index.deleteEntry((void*)&key);
         }
         else if(cmd == 'p') {
 
@@ -82,11 +91,16 @@ int main() {
 
         }
         index.dumpAllLevels();
+        index.validate();
+        if(bufMgr->pinnedCnt() != 0) {
+            bufMgr->printSelfPinned();
+        }
 //        bufMgr->printSelfNonNull();
 //        bufMgr->printSelf();
     }
 
 
+    /*
     int low = 10, high = 20;
     index.startScan((void*)&low, GTE, (void*)&high, LTE);
     printf("Starting scan\n");
@@ -100,6 +114,7 @@ int main() {
     } catch(IndexScanCompletedException e) {
     }
     index.endScan();
+    */
 
 
 //    index.dumpAllLevels();

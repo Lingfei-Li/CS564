@@ -285,6 +285,8 @@ class BufMgr
 	 */
   void  printSelfPinned();
 
+  int pinnedCnt();
+
 	/**
    * Get buffer pool usage statistics
 	 */

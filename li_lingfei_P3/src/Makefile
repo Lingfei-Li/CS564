@@ -41,11 +41,11 @@ $(OBJ)/btree.o: btree.*
 	cd $(OBJ)/;\
 	$(CC) $(CFLAGS) -c -I../ ../btree.cpp
 
-t:
+tt:
 	./out.mytest
 	rm relation_test*
 
-tt:
+t:
 	rm relation_test*
 	./out.mytest
 

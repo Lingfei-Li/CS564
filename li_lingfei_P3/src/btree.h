@@ -12,6 +12,7 @@
 #include "string.h"
 #include <sstream>
 #include <vector>
+#include <stack>
 
 #include "types.h"
 #include "page.h"
@@ -334,21 +335,8 @@ class BTreeIndex {
 	
  public:
 
-  /**
-   * BTreeIndex Constructor. 
-	 * Check to see if the corresponding index file exists. If so, open the file.
-	 * If not, create it and insert entries for every tuple in the base relation using FileScan class.
-   *
-   * @param relationName        Name of file.
-   * @param outIndexName        Return the name of index file.
-   * @param bufMgrIn						Buffer Manager Instance
-   * @param attrByteOffset			Offset of attribute, over which index is to be built, in the record
-   * @param attrType						Datatype of attribute over which index is built
-   * @throws  BadIndexInfoException     If the index file already exists for the corresponding attribute, but values in metapage(relationName, attribute byte offset, attribute type etc.) do not match with values received through constructor parameters.
-   */
 	BTreeIndex(const std::string & relationName, std::string & outIndexName,
 						BufMgr *bufMgrIn,	const int attrByteOffset,	const Datatype attrType);
-	
 
   /**
    * BTreeIndex Destructor. 
@@ -358,159 +346,19 @@ class BTreeIndex {
 	 * */
 	~BTreeIndex();
 
-
-  /**
-	 * Insert a new entry using the pair <value,rid>. 
-	 * Start from root to recursively find out the leaf to insert the entry in. The insertion may cause splitting of leaf node.
-	 * This splitting will require addition of new leaf page number entry into the parent non-leaf, which may in-turn get split.
-	 * This may continue all the way upto the root causing the root to get split. If root gets split, metapage needs to be changed accordingly.
-	 * Make sure to unpin pages as soon as you can.
-   * @param key			Key to insert, pointer to integer/double/char string
-   * @param rid			Record ID of a record whose entry is getting inserted into the index.
-	**/
 	const void insertEntry(const void* key, const RecordId rid);
 
     template<class T>
 	const void insertEntry_template(T key, const RecordId rid);
 
     template<class T>
-	const PageKeyPair<T> insertEntry_helper(T key, const RecordId rid, PageId curPageNo, int level) {
-        Page* curPage = NULL;
-        this->bufMgr->readPage(this->file, curPageNo, curPage);
-
-        PageKeyPair<T> ret;
-        ret.set(0, 0);
-
-        if(level == this->height){
-            //Base case: Reached leaf
-            LeafNode<T>* node = (LeafNode<T>*)curPage;
-
-            insertEntryInLeaf<T>(key, rid, node);
-
-            //Split
-            if(node->usage == this->leafOccupancy) {
-                PageId newPageNo;
-                Page* newPage;
-                this->bufMgr->allocPage(this->file, newPageNo, newPage);
-                LeafNode<T>* newNode = (LeafNode<T>*)newPage;
-
-                //redistribute
-                int cnt = 0;
-                for(int i = this->leafOccupancy/2; i < this->leafOccupancy; i ++) {
-                    //newNode is rhs, node is lhs
-                    newNode->ridKeyPairArray[cnt] = node->ridKeyPairArray[i];
-                    cnt ++;
-                }
-
-                //set usage
-                newNode->usage = cnt;
-                node->usage = this->leafOccupancy - cnt;
-
-                //set sib pointers. note: order is important
-                newNode->rightSibPageNo = node->rightSibPageNo;
-                newNode->leftSibPageNo = curPageNo;
-                node->rightSibPageNo = newPageNo;
-
-                //Update right node's left sib
-                Page* rightSibPage;
-                if(newNode->rightSibPageNo != 0) {
-                    this->bufMgr->readPage(this->file, newNode->rightSibPageNo, rightSibPage);
-                    LeafNode<T>* rightSibNode = (LeafNode<T>*)rightSibPage;
-                    rightSibNode->leftSibPageNo = newPageNo;
-                    this->bufMgr->unPinPage(this->file, newNode->rightSibPageNo, true);
-                }
-
-                //copy up
-                ret.set(newPageNo, newNode->ridKeyPairArray[0].key);
-
-                //Jobs with the new node is done. Release the new node
-                this->bufMgr->unPinPage(this->file, newPageNo, true);
-            }
-        }
-        else {
-            NonLeafNode<T>* node = (NonLeafNode<T>*)curPage;
-            int i;
-            for(i = 0; i < node->usage; i ++ ){
-                //TODO: change the comparison method for char*
-                if(key < node->pageKeyPairArray[i].key) {
-                    break;
-                }
-            }
-            PageId childPageNo = node->pageKeyPairArray[i].pageNo;
-            PageKeyPair<T> pushUp = this->insertEntry_helper(key, rid, childPageNo, level + 1);
-            if(pushUp.pageNo != 0) {
-                insertEntryInNonLeaf(pushUp.key, pushUp.pageNo, node);
-                if(node->usage == this->nodeOccupancy) {
-                    PageId newPageNo;
-                    Page* newPage;
-                    this->bufMgr->allocPage(this->file, newPageNo, newPage);
-                    NonLeafNode<T>* newNode = (NonLeafNode<T>*)newPage;
-
-                    //push up
-                    ret.set(newPageNo, node->pageKeyPairArray[this->nodeOccupancy/2].key);
-                                                        
-                    //redistribute
-                    int cnt = 0;
-                    for(int i = this->nodeOccupancy/2+1; i < this->nodeOccupancy; i ++) {
-                        newNode->pageKeyPairArray[cnt] = node->pageKeyPairArray[i];
-                        cnt ++;
-                    }
-                    newNode->pageKeyPairArray[cnt] = node->pageKeyPairArray[this->nodeOccupancy];
-
-                    //set usage
-                    newNode->usage = cnt;
-                    node->usage = this->nodeOccupancy - cnt - 1;
-
-                    //Jobs with the new node is done. Release the new node
-                    this->bufMgr->unPinPage(this->file, newPageNo, true);
-                }
-            }
-        }
-
-        this->bufMgr->unPinPage(this->file, curPageNo, true);
-        return ret;
-    }
+	const PageKeyPair<T> insertEntry_helper(T key, const RecordId rid, PageId curPageNo, int level);
 
     template<class T>
-    const void insertEntryInLeaf(T key, const RecordId rid, LeafNode<T>* node) {
-        int i = 0;
-        for(i = 0; i < node->usage; i ++ ){
-            if(key < node->ridKeyPairArray[i].key) {
-                break;
-            }
-        }
-
-        //Shift all elements after this position
-        for(int j = node->usage; j > i; j -- ){
-            node->ridKeyPairArray[j] = node->ridKeyPairArray[j-1];
-        }
-        node->ridKeyPairArray[i].key = key;
-        node->ridKeyPairArray[i].rid = rid;
-
-        node->usage ++;
-    }
+    const void insertEntryInLeaf(T key, const RecordId rid, LeafNode<T>* node);
 
     template<class T>
-    const void insertEntryInNonLeaf(T key, const PageId pageNo, NonLeafNode<T>* node) {
-        int i = 0;
-        for(i = 0; i < node->usage; i ++ ){
-            if(key < node->pageKeyPairArray[i].key) {
-                break;
-            }
-        }
-
-        //Shift all elements after this position
-        for(int j = node->usage; j > i; j -- ){
-            node->pageKeyPairArray[j].key = node->pageKeyPairArray[j - 1].key;
-            node->pageKeyPairArray[j+1].pageNo = node->pageKeyPairArray[j+1-1].pageNo;
-        }
-
-        node->pageKeyPairArray[i].key = key;
-        node->pageKeyPairArray[i+1].pageNo = pageNo;
-
-        node->usage ++;
-    }
-
+    const void insertEntryInNonLeaf(T key, const PageId pageNo, NonLeafNode<T>* node);
 
     template<class T>
 	const void createNewRoot(PageKeyPair<T>& ret);
@@ -531,12 +379,42 @@ class BTreeIndex {
 
     template<class T>
     const void dumpLevel1(PageId curPageNo, int curLevel, int dumpLevel);
+
     template<class T>
 	const void dumpLeaf();
 
-//    const void printNode(LeafNodeInt* node, PageId pageNo);
-//    const void printNode(NonLeafNodeInt* node, PageId pageNo);
+    /* Deletion */
+    const void deleteEntry(const void *key);
+
+    template<class T>
+    const void deleteEntry_helper(T key, PageId curPageNo, NonLeafNode<T>* parentNode, 
+            int keyIndexAtParent, int level, std::vector<PageId>& disposePageNo);
+
+    template<class T>
+    const bool deleteEntryFromLeaf(T key, LeafNode<T>* node);
+
+    template<class T>
+    const void deleteEntryFromNonLeaf(const int keyIndex, NonLeafNode<T>* node);
+
+    template<class T>
+    const void deleteEntry_helper_leaf(T key, PageId curPageNo, NonLeafNode<T>* parentNode, 
+            int keyIndexAtParent, std::vector<PageId>& disposePageNo);
+
+    /* B+Tree structure Validator */
+    class ValidationFailedException{ };
+
+    const bool validate();
+
+    template<class T>
+    const void validate_helper(PageId curPageNo, int level, std::stack<PageId>& pinnedPage);
+
+    template<class T>
+    const void validate_helper_leaf(PageId curPageNo, std::stack<PageId>& pinnedPage);
 
 };
 
 }
+
+#include "btree.insert.hpp"
+#include "btree.delete.hpp"
+#include "btree.validate.hpp"
