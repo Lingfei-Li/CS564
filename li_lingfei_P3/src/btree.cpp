@@ -480,16 +480,27 @@ const void BTreeIndex::dumpLeaf()
 const void BTreeIndex::deleteEntry(const void *key)
 {
 
-    std::vector<PageId> disposePageNo = std::vector<PageId>();
+    std::stack<PageId> pinnedPage;
+    std::vector<PageId> disposePageNo;
 
-    if(this->attributeType == INTEGER) {
-        this->deleteEntry_helper<int>(*(int*)key, this->rootPageNum, NULL, -1, 0, disposePageNo);
+    try {
+        if(this->attributeType == INTEGER) {
+            this->deleteEntry_helper<int>(*(int*)key, this->rootPageNum, NULL, -2, 0, disposePageNo, pinnedPage);
+        }
+        else if(this->attributeType == DOUBLE) {
+            this->deleteEntry_helper<double>(*(double*)key, this->rootPageNum, NULL, -2, 0, disposePageNo, pinnedPage);
+        }
+        else {
+            this->deleteEntry_helper<char*>((char*)key, this->rootPageNum, NULL, -2, 0, disposePageNo, pinnedPage);
+        }
     }
-    else if(this->attributeType == DOUBLE) {
-        this->deleteEntry_helper<double>(*(double*)key, this->rootPageNum, NULL, -1, 0, disposePageNo);
-    }
-    else {
-        this->deleteEntry_helper<char*>((char*)key, this->rootPageNum, NULL, -1, 0, disposePageNo);
+    catch(DeletionKeyNotFoundException e) {
+        while(pinnedPage.empty() == false) {
+            PageId pageNo = pinnedPage.top();
+            this->bufMgr->unPinPage(this->file, pageNo, false);
+            pinnedPage.pop();
+        }
+        printf("Deletion key not found\n");
     }
 
 //    this->bufMgr->flushFile(this->file);
@@ -504,10 +515,10 @@ const void BTreeIndex::deleteEntry(const void *key)
 }
 
 
-const bool BTreeIndex::validate() {
-    std::cout<<"\n========= Validation Result ==========\n";
-    std::stack<PageId> pinnedPage;
+const bool BTreeIndex::validate(bool showInfo) {
+    if(showInfo) std::cout<<"\n========= Validation Result ==========\n";
 
+    std::stack<PageId> pinnedPage;
     try {
         if(this->attributeType == INTEGER) {
             this->validate_helper<int>(this->rootPageNum, 0, pinnedPage);
@@ -535,8 +546,10 @@ const bool BTreeIndex::validate() {
         return false;
     }
 
-    printf("Validation passed\n");
-    std::cout<<"======================================\n\n";
+    if(showInfo) {
+        printf("Validation passed\n");
+        std::cout<<"======================================\n\n";
+    }
     return true;
 }
 

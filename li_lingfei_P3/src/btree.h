@@ -384,11 +384,17 @@ class BTreeIndex {
 	const void dumpLeaf();
 
     /* Deletion */
+    class DeletionKeyNotFoundException{ };
+
     const void deleteEntry(const void *key);
 
     template<class T>
     const void deleteEntry_helper(T key, PageId curPageNo, NonLeafNode<T>* parentNode, 
-            int keyIndexAtParent, int level, std::vector<PageId>& disposePageNo);
+            int keyIndexAtParent, int level, std::vector<PageId>& disposePageNo, std::stack<PageId>& pinnedPage);
+
+    template<class T>
+    const void deleteEntry_helper_leaf(T key, PageId curPageNo, NonLeafNode<T>* parentNode, 
+            int keyIndexAtParent, std::vector<PageId>& disposePageNo, std::stack<PageId>& pinnedPage);
 
     template<class T>
     const bool deleteEntryFromLeaf(T key, LeafNode<T>* node);
@@ -396,14 +402,11 @@ class BTreeIndex {
     template<class T>
     const void deleteEntryFromNonLeaf(const int keyIndex, NonLeafNode<T>* node);
 
-    template<class T>
-    const void deleteEntry_helper_leaf(T key, PageId curPageNo, NonLeafNode<T>* parentNode, 
-            int keyIndexAtParent, std::vector<PageId>& disposePageNo);
 
     /* B+Tree structure Validator */
     class ValidationFailedException{ };
 
-    const bool validate();
+    const bool validate(bool showInfo);
 
     template<class T>
     const void validate_helper(PageId curPageNo, int level, std::stack<PageId>& pinnedPage);

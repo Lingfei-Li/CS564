@@ -16,6 +16,7 @@
 #include <vector>
 #include <fstream>
 #include <iostream>
+#include <algorithm>
 
 using namespace badgerdb;
 
@@ -25,6 +26,15 @@ typedef struct tuple {
 	char s[64];
 } RECORD;
 
+
+void testDeletion(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr);
+
+void testScan(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr);
+
+void testInsertion(BTreeIndex& index, BufMgr& bufMgr);
+
+void manualTest(BTreeIndex& index, BufMgr* bufMgr);
+
 int main() {
     BufMgr * bufMgr = new BufMgr(100);
     const std::string relationName = "relation_test";
@@ -32,38 +42,84 @@ int main() {
 
     BTreeIndex index(relationName, indexName, bufMgr, offsetof(tuple,i), INTEGER);
 
-    std::vector<int> input;
-
     std::ifstream myfile;
     myfile.open ("input");
 
-    int x;
-    while(myfile>>x) {
-        input.push_back(x);
-    }
-
+    int n;
+    myfile>>n;
     myfile.close();
-
-//    for(int i = input[0]; i >= 0; i --) {
-    for(int i = 0; i < input[0]; i ++) {
+    std::vector<int> input;
+    for(int i = 0; i < n; i ++) {
         int key = i*2;
 
-        RecordId rid;
-        rid.page_number = key;
-        rid.slot_number = key;
+        RecordId rid; rid.page_number = key; rid.slot_number = key; 
 
+        input.push_back(key);
         index.insertEntry((void*)&key, rid);
     }
 
-    /*
-    for(int i = 0; i < input[0]-5; i ++) {
-        int key = i;
+    index.dumpAllLevels();
+
+    testDeletion(input, index, bufMgr);
+//    manualTest(index, bufMgr);
+
+    delete bufMgr;
+
+    return 0;
+}
+
+
+void testDeletion(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr) {
+
+    std::vector<int> deletionIndex;
+    for(size_t i = 0; i < input.size(); i ++) {
+        deletionIndex.push_back(i);
+    }
+    std::random_shuffle(deletionIndex.begin(), deletionIndex.end());
+
+    for(size_t i = 0; i < deletionIndex.size(); i ++) {
+        int key = 11;
+//        int key = input[deletionIndex[i]];
         printf("deleting %d...\n", key);
         index.deleteEntry((void*)&key);
-        index.dumpAllLevels();
+        if(index.validate(false) == false) {
+            break;
+        }
     }
+
+    return;
+}
+
+void testScan(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr) {
+    /*
+    int low = 10, high = 20;
+    index.startScan((void*)&low, GTE, (void*)&high, LTE);
+    printf("Starting scan\n");
+    try {
+        RecordId rid;
+        rid.page_number = 1;
+        while(rid.page_number != 0) {
+            index.scanNext(rid);
+            printf("rid.pageNo: %d slotNo: %d\n", rid.page_number, rid.slot_number);
+        }
+    } catch(IndexScanCompletedException e) {
+    }
+    index.endScan();
     */
 
+
+//    index.dumpAllLevels();
+//    bufMgr->printSelfPinned();
+//    bufMgr->printSelfNonNull();
+}
+
+void testInsertion(BTreeIndex& index, BufMgr& bufMgr) {
+
+    return;
+}
+
+
+void manualTest(BTreeIndex& index, BufMgr* bufMgr) {
     index.dumpAllLevels();
     char cmd;
     int arg;
@@ -85,13 +141,13 @@ int main() {
 
         }
         else if(cmd == 'q') {
-            return 0;
+            return;
         }
         else {
 
         }
         index.dumpAllLevels();
-        index.validate();
+        index.validate(true);
         if(bufMgr->pinnedCnt() != 0) {
             bufMgr->printSelfPinned();
         }
@@ -99,31 +155,4 @@ int main() {
 //        bufMgr->printSelf();
     }
 
-
-    /*
-    int low = 10, high = 20;
-    index.startScan((void*)&low, GTE, (void*)&high, LTE);
-    printf("Starting scan\n");
-    try {
-        RecordId rid;
-        rid.page_number = 1;
-        while(rid.page_number != 0) {
-            index.scanNext(rid);
-            printf("rid.pageNo: %d slotNo: %d\n", rid.page_number, rid.slot_number);
-        }
-    } catch(IndexScanCompletedException e) {
-    }
-    index.endScan();
-    */
-
-
-//    index.dumpAllLevels();
-//    bufMgr->printSelfPinned();
-//    bufMgr->printSelfNonNull();
-
-
-    delete bufMgr;
-
-
-    return 0;
 }

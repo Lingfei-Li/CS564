@@ -12,20 +12,20 @@
 
 namespace badgerdb
 {
-
     template<class T>
     const void BTreeIndex::deleteEntry_helper(T key, PageId curPageNo, NonLeafNode<T>* parentNode, 
-            int keyIndexAtParent, int level, std::vector<PageId>& disposePageNo) {
+            int keyIndexAtParent, int level, std::vector<PageId>& disposePageNo, std::stack<PageId>& pinnedPage) {
 
         if(level == this->height){
             //Leaf
-            deleteEntry_helper_leaf<T>(key, curPageNo, parentNode, keyIndexAtParent, disposePageNo);
+            deleteEntry_helper_leaf<T>(key, curPageNo, parentNode, keyIndexAtParent, disposePageNo, pinnedPage);
         }
         else {
             //Internal node
 
             Page* curPage = NULL;
             this->bufMgr->readPage(this->file, curPageNo, curPage);
+            pinnedPage.push(curPageNo);
             NonLeafNode<T>* node = (NonLeafNode<T>*)curPage;
             //Search page pointer for key. -1 because the last pair doesn't have a key. it only has a pageNo
             int i;
@@ -40,7 +40,7 @@ namespace badgerdb
             //Index:   i-1  i-1  i   i 
             //After redistribtute: [10] 400 [20] 600, key = 550
             //Index:                i-1 i-1  i    i 
-            deleteEntry_helper<T>(key, node->pageKeyPairArray[i].pageNo, node, i-1, level+1, disposePageNo);
+            deleteEntry_helper<T>(key, node->pageKeyPairArray[i].pageNo, node, i-1, level+1, disposePageNo, pinnedPage);
 
             if(level == 0 && node->usage == 0) {
                 //Root is empty: assign its only child as the new root
@@ -48,7 +48,7 @@ namespace badgerdb
                 this->rootPageNum = node->pageKeyPairArray[0].pageNo;
                 this->height --;
             }
-            else if(node->usage < this->nodeOccupancy/2 - 1) {
+            else if(level != 0 && node->usage < this->nodeOccupancy/2 - 1) {
                 if(keyIndexAtParent != -1) {
                     //Normal case: redistribute/merge with left sibling
 
@@ -56,6 +56,7 @@ namespace badgerdb
                     PageId sibPageNo = parentNode->pageKeyPairArray[keyIndexAtParent].pageNo;  
                     Page* sibPage = NULL;
                     this->bufMgr->readPage(this->file, sibPageNo, sibPage);
+                    pinnedPage.push(sibPageNo);
                     NonLeafNode<T>* sibNode = (NonLeafNode<T>*)sibPage;
 
                     if(sibNode->usage >= this->nodeOccupancy/2) {
@@ -113,17 +114,26 @@ namespace badgerdb
                         //return. parent will handle its own process
                     }
                     this->bufMgr->unPinPage(this->file, sibPageNo, true);
+                    pinnedPage.pop();
                 }
                 else {
-                    /*
                     //Special case: leftmost page ptr in the parent node
                     //Use right sibling 
                     
                     //currentNode's pageNoIndex = keyIndexAtParent + 1
                     //right sibling's pageNoIndex = keyIndexAtParent + 2
+                    
+                    //Illustration (parent node):
+                    //      k1      k2      k3
+                    //  p1      p2      p3      p4
+                    //  keyIndexAtParent: 1
+                    //  curPageNo: p2 (keyIndexAtParent + 1)
+                    //  sibPageNo: p3 (keyIndexAtParent + 2)
+                    
                     PageId sibPageNo = parentNode->pageKeyPairArray[keyIndexAtParent+2].pageNo;  
                     Page* sibPage = NULL;
                     this->bufMgr->readPage(this->file, sibPageNo, sibPage);
+                    pinnedPage.push(sibPageNo);
                     NonLeafNode<T>* sibNode = (NonLeafNode<T>*)sibPage;
 
                     if(sibNode->usage >= this->nodeOccupancy/2) {
@@ -131,10 +141,8 @@ namespace badgerdb
                         //get the first pageNo from sib, append it to curNode
                         //get the first key from sib, update parent's pageKeyArray[keyIndex+1].key
 
-                        PageId insertionPageNo = sibNode->pageKeyPairArray[0].pageNo;
                         T insertionKey = parentNode->pageKeyPairArray[keyIndexAtParent+1].key;
-                        PageKeyPair<T> pageKeyPair;
-                        pageKeyPair.set( insertionPageNo, insertionKey );
+                        PageId insertionPageNo = sibNode->pageKeyPairArray[0].pageNo;
 
                         //Append insertion key and pageNo
                         node->pageKeyPairArray[node->usage].key = insertionKey;
@@ -142,45 +150,76 @@ namespace badgerdb
                         node->usage ++;
 
                         //update parent with the first key from sib. 
-                        parentNode->pageKeyPairArray[keyIndexAtParent+1].key = sibNode->pageKeyPairArray[sibNode->usage-1].key;
+                        parentNode->pageKeyPairArray[keyIndexAtParent+1].key = sibNode->pageKeyPairArray[0].key;
 
-                        //TODO: shift all elements in sib to left
+                        //shift all elements in sib to left
+                        for(int i = 0; i < sibNode->usage; i ++) {
+                            sibNode->pageKeyPairArray[i] = sibNode->pageKeyPairArray[i+1];
+                        }
                         //shrink sib page
                         sibNode->usage --;
 
                         //Return. parent will handle its own process
-
                     }
                     else {
-                        //merge with sibling
+                        //sibling merges into curNode
+                        //pull the key value at keyIndex from parent (sibling's key)
+                        //delete the page ptr at keyIndex+2 (sibling's page pointer)
+                        
+                        //Status of parent node:
+                        //      k1      k2      k3
+                        //  p1      p2      p3      p4
+                        //  keyIndexAtParent: 1
+                        //  curPageNo: p2
+                        //  sibPageNo (to be deleted): p3
+                        //  key to be deleted: k2
 
-                        //delete key from parent
+                        T keyFromParent = parentNode->pageKeyPairArray[keyIndexAtParent+1].key;
+                        deleteEntryFromNonLeaf(keyIndexAtParent+1, parentNode);       //delete the key and rhs page ptr
+
+                        //Status of curNode:
+                        //insert the key from parent to cur node
+                        //      k1      k2      k_ 
+                        //  p1      p2      p3    
+                        node->pageKeyPairArray[node->usage].key = keyFromParent;
+                        node->usage ++;
+
+                        //Status of curNode:
+                        //insert the pageKeyPair from sib to cur node
+                        //      k1      k2      k_      k'1     k'2
+                        //  p1      p2      p3      p'1     p'2     p'3
+                        for(int i = 0; i < sibNode->usage; i ++) {
+                            node->pageKeyPairArray[node->usage] = sibNode->pageKeyPairArray[i];
+                            node->usage ++;
+                        }
+                        node->pageKeyPairArray[node->usage].pageNo = sibNode->pageKeyPairArray[sibNode->usage].pageNo;
+
+                        disposePageNo.push_back(sibPageNo);
 
                         //return. parent will handle its own process
-                    
                     }
-                    */
                 }
             }
             else {
                 //NonLeaf usage > occupancy/2. Do nothing
             }
             this->bufMgr->unPinPage(this->file, curPageNo, true);
+            pinnedPage.pop();
         }
     }
     
     template<class T>
     const void BTreeIndex::deleteEntry_helper_leaf(T key, PageId curPageNo, NonLeafNode<T>* parentNode, 
-            int keyIndexAtParent, std::vector<PageId>& disposePageNo) {
+            int keyIndexAtParent, std::vector<PageId>& disposePageNo, std::stack<PageId>& pinnedPage) {
 
         Page* curPage = NULL;
         this->bufMgr->readPage(this->file, curPageNo, curPage);
+        pinnedPage.push(curPageNo);
         LeafNode<T>* node = (LeafNode<T>*)curPage;
 
         //delete the entry from node
         if(deleteEntryFromLeaf(key, node) == false) {
-            //Key not found. terminate deletion
-            printf("Deletion key not found\n");
+            throw DeletionKeyNotFoundException();
         }
         else {
             if(this->height != 0 && node->usage < this->leafOccupancy/2) {
@@ -189,6 +228,7 @@ namespace badgerdb
                 
                     Page* sibPage = NULL;
                     this->bufMgr->readPage(this->file, node->leftSibPageNo, sibPage);
+                    pinnedPage.push(node->leftSibPageNo);
                     LeafNode<T>* sibNode = (LeafNode<T>*)sibPage;
 
                     if(sibNode->usage > this->leafOccupancy/2) {
@@ -230,12 +270,14 @@ namespace badgerdb
                         //Return. Parent will handle its own redistribution/merging
                     }
                     this->bufMgr->unPinPage(this->file, node->leftSibPageNo, true);
+                    pinnedPage.pop();
                 }
                 else {
                     //Special case: leftmost node must redistribute/merge with right sibling
                     Page* sibPage = NULL;
                     PageId sibPageNo = node->rightSibPageNo;
                     this->bufMgr->readPage(this->file, sibPageNo, sibPage);
+                    pinnedPage.push(sibPageNo);
                     LeafNode<T>* sibNode = (LeafNode<T>*)sibPage;
                     if(sibNode->usage > this->leafOccupancy/2) {
                         //Redistribute
@@ -281,6 +323,7 @@ namespace badgerdb
                         //Done with curNode. Parent will handle its own redistribution/merging
                     }
                     this->bufMgr->unPinPage(this->file, sibPageNo, true);
+                    pinnedPage.pop();
                 }
             }
             else {
@@ -288,6 +331,7 @@ namespace badgerdb
             }
         }
         this->bufMgr->unPinPage(this->file, curPageNo, true);
+        pinnedPage.pop();
     }
 
     template<class T>
