@@ -428,6 +428,9 @@ const void BTreeIndex::dumpLevel1(PageId curPageNo, int curLevel, int dumpLevel)
         NonLeafNode<T>* curNode = (NonLeafNode<T>*)curPage;
         if(curLevel == dumpLevel) {
             std::cout<<curPageNo<<" usage "<<curNode->usage<<": ";
+
+            if(curNode->usage > this->nodeOccupancy) return;
+
             for(int i = 0; i < curNode->usage; i ++) {
                 std::cout<<"["<<curNode->pageKeyPairArray[i].pageNo<<"] "<<curNode->pageKeyPairArray[i].key<<" ";
             }
@@ -541,6 +544,7 @@ const bool BTreeIndex::validate(bool showInfo) {
             this->bufMgr->unPinPage(this->file, pageNo, false);
             pinnedPage.pop();
         }
+        std::cout<<"======================================\n";
         printf("Validation failed\n");
         std::cout<<"======================================\n\n";
         return false;

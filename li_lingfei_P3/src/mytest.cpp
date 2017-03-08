@@ -33,7 +33,7 @@ void testScan(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr);
 
 void testInsertion(BTreeIndex& index, BufMgr& bufMgr);
 
-void manualTest(BTreeIndex& index, BufMgr* bufMgr);
+void manualTest(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr);
 
 int main() {
     BufMgr * bufMgr = new BufMgr(100);
@@ -45,23 +45,23 @@ int main() {
     std::ifstream myfile;
     myfile.open ("input");
 
+    std::string test;
     int n;
-    myfile>>n;
+    myfile>>test>>n;
     myfile.close();
     std::vector<int> input;
     for(int i = 0; i < n; i ++) {
         int key = i*2;
 
-        RecordId rid; rid.page_number = key; rid.slot_number = key; 
-
         input.push_back(key);
-        index.insertEntry((void*)&key, rid);
     }
 
-    index.dumpAllLevels();
-
-    testDeletion(input, index, bufMgr);
-//    manualTest(index, bufMgr);
+    if(test == "d" || test == "del" || test=="deletion") {
+        testDeletion(input, index, bufMgr);
+    }
+    else if(test == "m" || test == "manual") {
+        manualTest(input, index, bufMgr);
+    }
 
     delete bufMgr;
 
@@ -71,23 +71,34 @@ int main() {
 
 void testDeletion(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr) {
 
-    std::vector<int> deletionIndex;
-    for(size_t i = 0; i < input.size(); i ++) {
-        deletionIndex.push_back(i);
-    }
-    std::random_shuffle(deletionIndex.begin(), deletionIndex.end());
+    srand(time(0));
+    int maxEpoch = 10;
+    for(int epoch = 0; epoch < maxEpoch; epoch ++) {
+        printf("Epoch %d\n", epoch);
+        for(size_t i = 0; i < input.size(); i ++) {
+            int key = input[i];
+            RecordId rid; rid.page_number = key; rid.slot_number = key; 
+            index.insertEntry((void*)&key, rid);
+        }
 
-    for(size_t i = 0; i < deletionIndex.size(); i ++) {
-        int key = 11;
-//        int key = input[deletionIndex[i]];
-        printf("deleting %d...\n", key);
-        index.deleteEntry((void*)&key);
-        if(index.validate(false) == false) {
-            break;
+        std::vector<int> deletionIndex;
+        for(size_t i = 0; i < input.size(); i ++) {
+            deletionIndex.push_back(i);
+        }
+        std::random_shuffle(deletionIndex.begin(), deletionIndex.end());
+
+        for(size_t i = 0; i < deletionIndex.size(); i ++) {
+            int key = input[deletionIndex[i]];
+            printf("deleting %d...\n", key);
+            index.deleteEntry((void*)&key);
+            if(index.validate(false) == false) {
+                index.dumpAllLevels();
+                return;
+            }
         }
     }
 
-    return;
+    printf("Deletion test passed\n");
 }
 
 void testScan(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr) {
@@ -119,7 +130,12 @@ void testInsertion(BTreeIndex& index, BufMgr& bufMgr) {
 }
 
 
-void manualTest(BTreeIndex& index, BufMgr* bufMgr) {
+void manualTest(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr) {
+    for(size_t i = 0; i < input.size(); i ++) {
+        int key = input[i];
+        RecordId rid; rid.page_number = key; rid.slot_number = key; 
+        index.insertEntry((void*)&key, rid);
+    }
     index.dumpAllLevels();
     char cmd;
     int arg;
@@ -148,11 +164,5 @@ void manualTest(BTreeIndex& index, BufMgr* bufMgr) {
         }
         index.dumpAllLevels();
         index.validate(true);
-        if(bufMgr->pinnedCnt() != 0) {
-            bufMgr->printSelfPinned();
-        }
-//        bufMgr->printSelfNonNull();
-//        bufMgr->printSelf();
     }
-
 }
