@@ -112,7 +112,7 @@ class Page {
    * different page size value will be unreadable by the resulting binaries.
    */
 //  static const std::size_t SIZE = 8192;
-  static const std::size_t SIZE = 64;
+  static const std::size_t SIZE = 128;
 
   /**
    * Size of page free space area in bytes.

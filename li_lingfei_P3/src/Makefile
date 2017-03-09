@@ -43,7 +43,6 @@ $(OBJ)/btree.o: btree.*
 
 tt:
 	./out.mytest
-	rm relation_test*
 
 t:
 	rm relation_test*

@@ -14,7 +14,6 @@
 namespace badgerdb
 {
 
-
     template<class T>
     const void BTreeIndex::validate_helper(PageId curPageNo, int level, std::stack<PageId>& pinnedPage) {
         if(level == this->height) {
@@ -80,7 +79,7 @@ namespace badgerdb
                     std::cout<<"highKey: "<<highKey<<", parent rhs key: "<<node->pageKeyPairArray[i].key<<"\n";
                     throw ValidationFailedException();
                 }
-                if(i != 0 && lowKey < node->pageKeyPairArray[i-1].key) {
+                if(i != 0 && smallerThan(lowKey, node->pageKeyPairArray[i-1].key)) {
                     printf("Child Page #%d lowKey < parent lhs key\n", childPageNo);
                     std::cout<<"lowKey: "<<lowKey<<", parent lhs key: "<<node->pageKeyPairArray[i-1].key<<"\n";
                     throw ValidationFailedException();
@@ -113,7 +112,7 @@ namespace badgerdb
         }
 
         for(int i = 1; i < node->usage; i ++) {
-            if(node->ridKeyPairArray[i].key < node->ridKeyPairArray[i-1].key) {
+            if(smallerThan(node->ridKeyPairArray[i].key, node->ridKeyPairArray[i-1].key)) {
                 printf("Leaf Page #%d invalid key order\n", curPageNo);
                 throw ValidationFailedException();
             }

@@ -13,6 +13,7 @@
 #include <sstream>
 #include <vector>
 #include <stack>
+#include <algorithm>
 
 #include "types.h"
 #include "page.h"
@@ -44,6 +45,25 @@ enum Operator
 };
 
 /**
+ * @brief Size of String key.
+ */
+const  int STRINGSIZE = 10;
+
+
+/* Assignment for structures*/
+inline void assignKey( int& dst, int src) {
+    dst = src;
+}
+inline void assignKey( double& dst, double src) {
+    dst = src;
+}
+inline void assignKey( char dst[STRINGSIZE+1], char* src) {
+    strncpy(dst, src, STRINGSIZE);
+    dst[STRINGSIZE] = '\0';
+}
+
+
+/**
  * @brief Structure to store a key-rid pair. It is used to pass the pair to functions that 
  * add to or make changes to the leaf node pages of the tree. Is templated for the key member.
  */
@@ -53,13 +73,23 @@ public:
 	RecordId rid;
 	T key;
 
-    //Constructors
-    RIDKeyPair() { }
-    RIDKeyPair(RecordId r, T k): rid(r), key(k) {}
 	void set( RecordId r, T k)
 	{
 		rid = r;
-		key = k;
+        assignKey(key, k);
+	}
+};
+
+template <>
+class RIDKeyPair<char*>{
+public:
+	RecordId rid;
+	char key[STRINGSIZE+1];     //Extra space for null terminator
+
+	void set( RecordId r, char* k)
+	{
+		rid = r;
+        assignKey(key, k);
 	}
 };
 
@@ -73,16 +103,34 @@ public:
 	PageId pageNo;
 	T key;
 
-    //Constructors
-    PageKeyPair() { }
-    PageKeyPair(PageId p, T k): pageNo(p), key(k) {}
+    PageKeyPair(): pageNo(0) { }
+    PageKeyPair(PageId p): pageNo(p) { }
 
 	void set( int p, T k)
 	{
 		pageNo = p;
-		key = k;
+        assignKey(key, k);
 	}
 };
+
+template <>
+class PageKeyPair<char*>{
+public:
+	PageId pageNo;
+	char key[STRINGSIZE+1];
+
+    PageKeyPair(): pageNo(0) { }
+    PageKeyPair(PageId p): pageNo(p) { }
+
+	void set( int p, char* k)
+	{
+		pageNo = p;
+        assignKey(key, k);
+	}
+};
+
+
+
 
 /**
  * @brief Overloaded operator to compare the key values of two rid-key pairs
@@ -98,10 +146,7 @@ bool operator<( const RIDKeyPair<T>& r1, const RIDKeyPair<T>& r2 )
 		return r1.rid.page_number < r2.rid.page_number;
 }
 
-/**
- * @brief Size of String key.
- */
-const  int STRINGSIZE = 10;
+
 
 /**
  * @brief Number of key slots in B+Tree leaf for INTEGER key.
@@ -119,13 +164,13 @@ const  int DOUBLEARRAYLEAFSIZE = ( Page::SIZE - sizeof( PageId ) - sizeof(int) )
  * @brief Number of key slots in B+Tree leaf for STRING key.
  */
 //                                                 sibling ptr        usage                  key                   rid
-const  int STRINGARRAYLEAFSIZE = ( Page::SIZE - sizeof( PageId ) - sizeof(int) ) / ( 10 * sizeof(char) + sizeof( RecordId ) );
+const  int STRINGARRAYLEAFSIZE = ( Page::SIZE - sizeof( PageId ) - sizeof(int) ) / ( (STRINGSIZE+1) * sizeof(char) + sizeof( RecordId ) );
 
 /**
  * @brief Number of key slots in B+Tree non-leaf for INTEGER key.
  */
 //                                                     level     usage                pageKeyPair
-const  int INTARRAYNONLEAFSIZE = ( Page::SIZE - sizeof( int ) - sizeof(int)) / ( sizeof(PageKeyPair<int>) ) - 1;
+const  int INTARRAYNONLEAFSIZE = ( Page::SIZE - sizeof( int ) - sizeof(int)) / ( sizeof(PageKeyPair<int>) ) - 1;    //-1 for the extra page ptr
 
 /**
  * @brief Number of key slots in B+Tree leaf for DOUBLE key.
@@ -137,7 +182,7 @@ const  int DOUBLEARRAYNONLEAFSIZE = (( Page::SIZE - sizeof( int ) -  sizeof(int)
  * @brief Number of key slots in B+Tree leaf for STRING key.
  */
 //                                                        level        extra pageNo      usage            PageKeyPair
-const  int STRINGARRAYNONLEAFSIZE = ( Page::SIZE - sizeof( int ) - sizeof( PageId ) - sizeof(int)) / ( sizeof(PageKeyPair<char[10]> ) ) - 1;
+const  int STRINGARRAYNONLEAFSIZE = ( Page::SIZE - sizeof( int ) - sizeof( PageId ) - sizeof(int)) / ( (STRINGSIZE+1)*sizeof(char) + sizeof(PageId) ) - 1;
 
 
 /**
@@ -198,7 +243,6 @@ template<typename T>
 struct LeafNode {
     //                                                 sibling ptr        usage                  RIDKeyPair
     const  static int ARRAYLEAFSIZE = ( Page::SIZE - 2*sizeof( PageId ) - sizeof(int) ) / ( sizeof(RIDKeyPair<T>) );
-    //TODO: check the size for string type
 
     int usage = 0;
 
@@ -206,6 +250,7 @@ struct LeafNode {
 
     PageId rightSibPageNo;
 
+    //TODO: delete left sib
     PageId leftSibPageNo;
 
 };
@@ -346,19 +391,6 @@ class BTreeIndex {
 	 * */
 	~BTreeIndex();
 
-	const void insertEntry(const void* key, const RecordId rid);
-
-    template<class T>
-	const void insertEntry_template(T key, const RecordId rid);
-
-    template<class T>
-	const PageKeyPair<T> insertEntry_helper(T key, const RecordId rid, PageId curPageNo, int level);
-
-    template<class T>
-    const void insertEntryInLeaf(T key, const RecordId rid, LeafNode<T>* node);
-
-    template<class T>
-    const void insertEntryInNonLeaf(T key, const PageId pageNo, NonLeafNode<T>* node);
 
     template<class T>
 	const void createNewRoot(PageKeyPair<T>& ret);
@@ -380,13 +412,45 @@ class BTreeIndex {
     template<class T>
     const void dumpLevel1(PageId curPageNo, int curLevel, int dumpLevel);
 
+    template<char*>
+    const void dumpLevel1(PageId curPageNo, int curLevel, int dumpLevel);
+
     template<class T>
 	const void dumpLeaf();
 
-    /* Deletion */
+    template<char*>
+	const void dumpLeaf();
+
+    /* Comparator */
+    /* Relativity comparisons */
+    const bool smallerThan(int lhs, int rhs) { return lhs < rhs; }
+    const bool smallerThan(double lhs, double rhs) { return lhs < rhs; }
+    const bool smallerThan(char* lhs, char* rhs) { return strncmp(lhs, rhs, STRINGSIZE) == -1; }
+
+    /* Equality comparisons */
+    const bool equals(int lhs, int rhs) { return lhs == rhs; }
+    const bool equals(double lhs, double rhs) { return fabs(lhs-rhs) < 0.00001; }
+    const bool equals(char* lhs, char* rhs) { return strncmp(lhs, rhs, 10) == 0; }
+
+    /* Insertion. Template functions are implemented in btree.insertion.hpp */
+	const void insertEntry(const void* key, const RecordId rid);
+
+    template<class T>
+	const void insertEntry_template(T key, const RecordId rid);
+
+    template<class T>
+	const PageKeyPair<T> insertEntry_helper(T key, const RecordId rid, PageId curPageNo, int level);
+
+    template<class T>
+    const void insertEntryInLeaf(T key, const RecordId rid, LeafNode<T>* node);
+
+    template<class T>
+    const void insertEntryInNonLeaf(T key, const PageId pageNo, NonLeafNode<T>* node);
+
+    /* Deletion. Template functions are implemented in btree.delete.hpp */
     class DeletionKeyNotFoundException{ };
 
-    const void deleteEntry(const void *key);
+    const bool deleteEntry(const void *key);
 
     template<class T>
     const void deleteEntry_helper(T key, PageId curPageNo, NonLeafNode<T>* parentNode, 
@@ -403,7 +467,7 @@ class BTreeIndex {
     const void deleteEntryFromNonLeaf(const int keyIndex, NonLeafNode<T>* node);
 
 
-    /* B+Tree structure Validator */
+    /* B+Tree structure Validator. Template functions are implemented in btree.validate.hpp */
     class ValidationFailedException{ };
 
     const bool validate(bool showInfo);
@@ -421,3 +485,4 @@ class BTreeIndex {
 #include "btree.insert.hpp"
 #include "btree.delete.hpp"
 #include "btree.validate.hpp"
+#include "btree.comparator.hpp"

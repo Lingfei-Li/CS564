@@ -169,8 +169,8 @@ const void BTreeIndex::createNewRoot(PageKeyPair<T>& ret)
         this->bufMgr->allocPage(this->file, rootPageNo, rootPage);
         NonLeafNode<T>* rootNode = (NonLeafNode<T>*)rootPage;
 
-
-        rootNode->pageKeyPairArray[0] = PageKeyPair<T>(this->rootPageNum, 0);
+        printf("new root page no: %d\n", rootPageNo);
+        rootNode->pageKeyPairArray[0].pageNo = this->rootPageNum;
         rootNode->usage = 0;
 
         this->rootPageNum = rootPageNo;
@@ -397,7 +397,7 @@ const void BTreeIndex::dumpLevel(int dumpLevel)
             dumpLeaf<double>();
         }
         else {
-            dumpLeaf<char[10]>();
+            dumpLeaf<char*>();
         }
     }
     else {
@@ -408,7 +408,7 @@ const void BTreeIndex::dumpLevel(int dumpLevel)
             dumpLevel1<double>(this->rootPageNum, 0, dumpLevel);
         }
         else {
-            dumpLevel1<char[10]>(this->rootPageNum, 0, dumpLevel);
+            dumpLevel1<char*>(this->rootPageNum, 0, dumpLevel);
         }
     }
 
@@ -424,12 +424,16 @@ const void BTreeIndex::dumpLevel1(PageId curPageNo, int curLevel, int dumpLevel)
     Page* curPage = NULL;
 
     if(curPageNo != 0) {
+        printf("dumpLevel1 read page %d\n", curPageNo);
         this->bufMgr->readPage(this->file, curPageNo, curPage);
         NonLeafNode<T>* curNode = (NonLeafNode<T>*)curPage;
         if(curLevel == dumpLevel) {
             std::cout<<curPageNo<<" usage "<<curNode->usage<<": ";
 
-            if(curNode->usage > this->nodeOccupancy) return;
+            if(curNode->usage > this->nodeOccupancy) {
+                printf("ohl...... usage: %d, nodeOccu: %d\n", curNode->usage, this->nodeOccupancy);
+                return;
+            }
 
             for(int i = 0; i < curNode->usage; i ++) {
                 std::cout<<"["<<curNode->pageKeyPairArray[i].pageNo<<"] "<<curNode->pageKeyPairArray[i].key<<" ";
@@ -441,9 +445,42 @@ const void BTreeIndex::dumpLevel1(PageId curPageNo, int curLevel, int dumpLevel)
                 dumpLevel1<T>(curNode->pageKeyPairArray[i].pageNo, curLevel + 1, dumpLevel);
             }
         }
+        printf("dumpLevel1 unpin page %d\n", curPageNo);
         this->bufMgr->unPinPage(this->file, curPageNo, false);
     }
 }
+
+template<char*>
+const void BTreeIndex::dumpLevel1(PageId curPageNo, int curLevel, int dumpLevel) 
+{
+    if(curLevel > dumpLevel) {
+        return;
+    }
+    Page* curPage = NULL;
+
+    if(curPageNo != 0) {
+        this->bufMgr->readPage(this->file, curPageNo, curPage);
+        NonLeafNode<char*>* curNode = (NonLeafNode<char*>*)curPage;
+        if(curLevel == dumpLevel) {
+            std::cout<<curPageNo<<" usage "<<curNode->usage<<": ";
+
+            if(curNode->usage > this->nodeOccupancy) return;
+
+            for(int i = 0; i < curNode->usage; i ++) {
+                printf("[%d] %s ", curNode->pageKeyPairArray[i].pageNo, curNode->pageKeyPairArray[i].key);
+            }
+            std::cout<<"["<<curNode->pageKeyPairArray[curNode->usage].pageNo<<"]\n";
+        }
+        else {
+            for(int i = 0; i < curNode->usage + 1; i ++) {
+                dumpLevel1<char*>(curNode->pageKeyPairArray[i].pageNo, curLevel + 1, dumpLevel);
+            }
+        }
+        this->bufMgr->unPinPage(this->file, curPageNo, false);
+    }
+}
+
+
 
 
 // -----------------------------------------------------------------------------
@@ -477,14 +514,43 @@ const void BTreeIndex::dumpLeaf()
     }
 }
 
+template<char*>
+const void BTreeIndex::dumpLeaf() 
+{
+    PageId curPageNo = this->rootPageNum;
+    Page* curPage = NULL;
+    for(int i = 0; i < this->height; i ++) {
+        this->bufMgr->readPage(this->file, curPageNo, curPage);
+        NonLeafNode<char*>* curNode = (NonLeafNode<char*>*)curPage;
+        PageId tmp = curPageNo;
+        curPageNo = curNode->pageKeyPairArray[0].pageNo;
+        this->bufMgr->unPinPage(this->file, tmp, false);
+    }
+
+    while(curPageNo != 0) {
+        this->bufMgr->readPage(this->file, curPageNo, curPage);
+        LeafNode<char*>* curNode = (LeafNode<char*>*)curPage;
+        std::cout<<curNode->leftSibPageNo<<"<-"<<curPageNo<<": ";
+        for(int i = 0; i < curNode->usage; i ++) {
+            printf("%s ", curNode->ridKeyPairArray[i].key);
+        }
+        std::cout<<" u:"<<curNode->usage<<"";
+        std::cout<<"\n";
+        PageId tmp = curPageNo;
+        curPageNo = curNode->rightSibPageNo;
+        this->bufMgr->unPinPage(this->file, tmp, false);
+    }
+}
 
 
 
-const void BTreeIndex::deleteEntry(const void *key)
+
+const bool BTreeIndex::deleteEntry(const void *key)
 {
 
     std::stack<PageId> pinnedPage;
     std::vector<PageId> disposePageNo;
+    bool result = true;
 
     try {
         if(this->attributeType == INTEGER) {
@@ -504,6 +570,7 @@ const void BTreeIndex::deleteEntry(const void *key)
             pinnedPage.pop();
         }
         printf("Deletion key not found\n");
+        result = false;
     }
 
 //    this->bufMgr->flushFile(this->file);
@@ -514,6 +581,8 @@ const void BTreeIndex::deleteEntry(const void *key)
 
         }
     }
+
+    return result;
 
 }
 

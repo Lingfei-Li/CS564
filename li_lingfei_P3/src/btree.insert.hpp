@@ -18,7 +18,6 @@ namespace badgerdb
         this->bufMgr->readPage(this->file, curPageNo, curPage);
 
         PageKeyPair<T> ret;
-        ret.set(0, 0);
 
         if(level == this->height){
             //Base case: Reached leaf
@@ -28,18 +27,22 @@ namespace badgerdb
 
             //Split
             if(node->usage == this->leafOccupancy) {
+                printf("splitting...\n");
                 PageId newPageNo;
                 Page* newPage;
                 this->bufMgr->allocPage(this->file, newPageNo, newPage);
                 LeafNode<T>* newNode = (LeafNode<T>*)newPage;
+                printf("new leaf: %d\n", newPageNo);
 
                 //redistribute
                 int cnt = 0;
                 for(int i = this->leafOccupancy/2; i < this->leafOccupancy; i ++) {
                     //newNode is rhs, node is lhs
-                    newNode->ridKeyPairArray[cnt] = node->ridKeyPairArray[i];
+                    newNode->ridKeyPairArray[cnt].rid = node->ridKeyPairArray[i].rid;
+                    assignKey(newNode->ridKeyPairArray[cnt].key, node->ridKeyPairArray[i].key);
                     cnt ++;
                 }
+
 
                 //set usage
                 newNode->usage = cnt;
@@ -70,8 +73,7 @@ namespace badgerdb
             NonLeafNode<T>* node = (NonLeafNode<T>*)curPage;
             int i;
             for(i = 0; i < node->usage; i ++ ){
-                //TODO: change the comparison method for char*
-                if(key < node->pageKeyPairArray[i].key) {
+                if(smallerThan(key, node->pageKeyPairArray[i].key)) {
                     break;
                 }
             }
@@ -91,10 +93,12 @@ namespace badgerdb
                     //redistribute
                     int cnt = 0;
                     for(int i = this->nodeOccupancy/2+1; i < this->nodeOccupancy; i ++) {
-                        newNode->pageKeyPairArray[cnt] = node->pageKeyPairArray[i];
+                        newNode->pageKeyPairArray[cnt].pageNo = node->pageKeyPairArray[i].pageNo;
+                        assignKey(newNode->pageKeyPairArray[cnt].key, node->pageKeyPairArray[i].key);
                         cnt ++;
                     }
-                    newNode->pageKeyPairArray[cnt] = node->pageKeyPairArray[this->nodeOccupancy];
+                    newNode->pageKeyPairArray[cnt].pageNo = node->pageKeyPairArray[this->nodeOccupancy].pageNo;
+                    assignKey(newNode->pageKeyPairArray[cnt].key, node->pageKeyPairArray[this->nodeOccupancy].key);
 
                     //set usage
                     newNode->usage = cnt;
@@ -112,19 +116,28 @@ namespace badgerdb
 
     template<class T>
     const void BTreeIndex::insertEntryInLeaf(T key, const RecordId rid, LeafNode<T>* node) {
+        std::cout<<"inserting leaf key: "<<key<<std::endl;
         int i = 0;
         for(i = 0; i < node->usage; i ++ ){
-            if(key < node->ridKeyPairArray[i].key) {
+            if(smallerThan(key, node->ridKeyPairArray[i].key)) {
                 break;
             }
         }
+        printf("sib pageNo: %d\n", node->rightSibPageNo);
+
 
         //Shift all elements after this position
         for(int j = node->usage; j > i; j -- ){
-            node->ridKeyPairArray[j] = node->ridKeyPairArray[j-1];
+            node->ridKeyPairArray[j].rid = node->ridKeyPairArray[j-1].rid;
+            assignKey(node->ridKeyPairArray[j].key, node->ridKeyPairArray[j-1].key);
         }
-        node->ridKeyPairArray[i].key = key;
+
+        printf("sib pageNo: %d\n", node->rightSibPageNo);
+
         node->ridKeyPairArray[i].rid = rid;
+        assignKey(node->ridKeyPairArray[i].key, key);
+
+        printf("sib pageNo: %d\n", node->rightSibPageNo);
 
         node->usage ++;
     }
@@ -132,21 +145,21 @@ namespace badgerdb
 
     template<class T>
     const void BTreeIndex::insertEntryInNonLeaf(T key, const PageId pageNo, NonLeafNode<T>* node) {
+        std::cout<<"inserting internal key: "<<key<<" pageNo "<<pageNo<<std::endl;
         int i = 0;
         for(i = 0; i < node->usage; i ++ ){
-            if(key < node->pageKeyPairArray[i].key) {
+            if(smallerThan(key, node->pageKeyPairArray[i].key)) {
                 break;
             }
         }
 
         //Shift all elements after this position
         for(int j = node->usage; j > i; j -- ){
-            node->pageKeyPairArray[j].key = node->pageKeyPairArray[j - 1].key;
             node->pageKeyPairArray[j+1].pageNo = node->pageKeyPairArray[j+1-1].pageNo;
+            assignKey(node->pageKeyPairArray[j].key, node->pageKeyPairArray[j-1].key);
         }
-
-        node->pageKeyPairArray[i].key = key;
         node->pageKeyPairArray[i+1].pageNo = pageNo;
+        assignKey(node->pageKeyPairArray[i].key, key);
 
         node->usage ++;
     }

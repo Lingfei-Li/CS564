@@ -30,7 +30,7 @@ namespace badgerdb
             //Search page pointer for key. -1 because the last pair doesn't have a key. it only has a pageNo
             int i;
             for(i = 0; i < node->usage; i ++ ){
-                if(key < node->pageKeyPairArray[i].key) {
+                if(smallerThan(key, node->pageKeyPairArray[i].key)) {
                     break;
                 }
             }
@@ -80,7 +80,9 @@ namespace badgerdb
                         node->pageKeyPairArray[0] = pageKeyPair;
 
                         //update parent with the last key from sib. 
-                        parentNode->pageKeyPairArray[keyIndexAtParent].key = sibNode->pageKeyPairArray[sibNode->usage-1].key;
+//                        parentNode->pageKeyPairArray[keyIndexAtParent].key = sibNode->pageKeyPairArray[sibNode->usage-1].key;
+                        assignKey(parentNode->pageKeyPairArray[keyIndexAtParent].key, 
+                                sibNode->pageKeyPairArray[sibNode->usage-1].key);
 
                         //shrink sib page
                         sibNode->usage --;
@@ -100,7 +102,8 @@ namespace badgerdb
                         //insert the keyFromParent (k_) to the last pos
                         //      k1      k2      k_
                         //  p1      p2      p3
-                        sibNode->pageKeyPairArray[sibNode->usage].key = keyFromParent;
+//                        sibNode->pageKeyPairArray[sibNode->usage].key = keyFromParent;
+                        assignKey(sibNode->pageKeyPairArray[sibNode->usage].key, keyFromParent);
                         sibNode->usage ++;
 
                         //insert the pageKeyPair from current node to sib
@@ -150,12 +153,16 @@ namespace badgerdb
                         PageId insertionPageNo = sibNode->pageKeyPairArray[0].pageNo;
 
                         //Append insertion key and pageNo
-                        node->pageKeyPairArray[node->usage].key = insertionKey;
+//                        node->pageKeyPairArray[node->usage].key = insertionKey;
+                        assignKey(node->pageKeyPairArray[node->usage].key, insertionKey);
+
                         node->pageKeyPairArray[node->usage+1].pageNo = insertionPageNo;
                         node->usage ++;
 
                         //update parent with the first key from sib. 
-                        parentNode->pageKeyPairArray[keyIndexAtParent+1].key = sibNode->pageKeyPairArray[0].key;
+//                        parentNode->pageKeyPairArray[keyIndexAtParent+1].key = sibNode->pageKeyPairArray[0].key;
+                        assignKey(parentNode->pageKeyPairArray[keyIndexAtParent+1].key, 
+                                sibNode->pageKeyPairArray[0].key);
 
                         //shift all elements in sib to left
                         for(int i = 0; i < sibNode->usage; i ++) {
@@ -188,7 +195,8 @@ namespace badgerdb
                         //insert the key from parent to cur node
                         //      k1      k2      k_ 
                         //  p1      p2      p3    
-                        node->pageKeyPairArray[node->usage].key = keyFromParent;
+//                        node->pageKeyPairArray[node->usage].key = keyFromParent;
+                        assignKey(node->pageKeyPairArray[node->usage].key, keyFromParent);
                         node->usage ++;
 
                         //Status of curNode:
@@ -250,7 +258,8 @@ namespace badgerdb
                         insertEntryInLeaf<T>(ridKeyPair.key, ridKeyPair.rid, node);
 
                         //Update the key of parent
-                        parentNode->pageKeyPairArray[keyIndexAtParent].key = ridKeyPair.key;
+//                        parentNode->pageKeyPairArray[keyIndexAtParent].key = ridKeyPair.key;
+                        assignKey(parentNode->pageKeyPairArray[keyIndexAtParent].key, ridKeyPair.key);
 
                         //All Done
                     }
@@ -304,7 +313,9 @@ namespace badgerdb
                         //Update the key of parent
                         //Since curNode is the leftmost, its right sibling must have the same parent
                         //The position of key to be updated is the index of the key of curNode + 1
-                        parentNode->pageKeyPairArray[keyIndexAtParent+1].key = sibNode->ridKeyPairArray[0].key;
+//                        parentNode->pageKeyPairArray[keyIndexAtParent+1].key = sibNode->ridKeyPairArray[0].key;
+                        assignKey(parentNode->pageKeyPairArray[keyIndexAtParent+1].key, 
+                                sibNode->ridKeyPairArray[0].key);
 
                         //All Done
                     }
@@ -352,7 +363,7 @@ namespace badgerdb
     const bool BTreeIndex::deleteEntryFromLeaf(T key, LeafNode<T>*  node) {
         int i = 0;
         for(i = 0; i < node->usage; i ++ ){
-            if(key == node->ridKeyPairArray[i].key) {
+            if(equals(key, node->ridKeyPairArray[i].key)) {
                 break;
             }
         }
@@ -380,7 +391,10 @@ namespace badgerdb
 
         for(int j = keyIndex; j < node->usage - 1; j ++){
             //Sometimes the child is the leftmost of the parent. keyIndex can be -1
-            if(j >= 0) node->pageKeyPairArray[j].key = node->pageKeyPairArray[j+1].key;
+            if(j >= 0) {
+//                node->pageKeyPairArray[j].key = node->pageKeyPairArray[j+1].key;
+                assignKey(node->pageKeyPairArray[j].key, node->pageKeyPairArray[j+1].key);
+            }
             node->pageKeyPairArray[j+1].pageNo = node->pageKeyPairArray[j+2].pageNo;
         }
         node->usage --;

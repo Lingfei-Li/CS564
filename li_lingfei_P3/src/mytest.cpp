@@ -35,15 +35,30 @@ void testInsertion(BTreeIndex& index, BufMgr& bufMgr);
 
 void manualTest(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr);
 
+Datatype datatype;
+
 int main() {
     BufMgr * bufMgr = new BufMgr(100);
     const std::string relationName = "relation_test";
     std::string indexName;
 
-    BTreeIndex index(relationName, indexName, bufMgr, offsetof(tuple,i), INTEGER);
-
     std::ifstream myfile;
     myfile.open ("input");
+
+    std::string type;
+    myfile>>type;
+    if(type == "i") {
+        datatype = INTEGER;
+    }
+    else if(type == "d"){
+        datatype = DOUBLE;
+    }
+    else if(type == "s"){
+        datatype = STRING;
+    }
+
+    BTreeIndex index(relationName, indexName, bufMgr, offsetof(tuple,i), datatype);
+
 
     std::string test;
     int n;
@@ -76,9 +91,22 @@ void testDeletion(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr) {
     for(int epoch = 0; epoch < maxEpoch; epoch ++) {
         printf("Epoch %d\n", epoch);
         for(size_t i = 0; i < input.size(); i ++) {
-            int key = input[i];
-            RecordId rid; rid.page_number = key; rid.slot_number = key; 
-            index.insertEntry((void*)&key, rid);
+            if(datatype == INTEGER) {
+                int key = input[i];
+                RecordId rid; rid.page_number = input[i]; rid.slot_number = input[i]; 
+                index.insertEntry((void*)&key, rid);
+            }
+            else if(datatype == DOUBLE) {
+                double key = (double)(input[i]);
+                RecordId rid; rid.page_number = i; rid.slot_number = i; 
+                index.insertEntry((void*)&key, rid);
+            }
+            else if(datatype == STRING){
+                char key[15];
+                snprintf(key, 14, "%d1234567890", input[i]);
+                RecordId rid; rid.page_number = i; rid.slot_number = i; 
+                index.insertEntry((void*)&key, rid);
+            }
         }
 
         std::vector<int> deletionIndex;
@@ -88,12 +116,33 @@ void testDeletion(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr) {
         std::random_shuffle(deletionIndex.begin(), deletionIndex.end());
 
         for(size_t i = 0; i < deletionIndex.size(); i ++) {
-            int key = input[deletionIndex[i]];
-            printf("deleting %d...\n", key);
-            index.deleteEntry((void*)&key);
-            if(index.validate(false) == false) {
-                index.dumpAllLevels();
-                return;
+            if(datatype == INTEGER) {
+                int key = input[deletionIndex[i]];
+                printf("deleting %d...\n", key);
+                if(index.deleteEntry((void*)&key) == false || index.validate(false) == false) {
+                    index.dumpAllLevels();
+                    printf("Deletion test failed\n");
+                    return;
+                }
+            }
+            else if(datatype == DOUBLE) {
+                double key = (double)input[deletionIndex[i]];
+                printf("deleting %lf...\n", key);
+                if(index.deleteEntry((void*)&key) == false || index.validate(false) == false) {
+                    index.dumpAllLevels();
+                    printf("Deletion test failed\n");
+                    return;
+                }
+            }
+            else if(datatype == STRING){
+                char key[15];
+                snprintf(key, 14, "%d1234567890", input[deletionIndex[i]]);
+                printf("deleting %s...\n", key);
+                if(index.deleteEntry((void*)&key) == false || index.validate(false) == false) {
+                    index.dumpAllLevels();
+                    printf("Deletion test failed\n");
+                    return;
+                }
             }
         }
     }
@@ -131,22 +180,57 @@ void testInsertion(BTreeIndex& index, BufMgr& bufMgr) {
 
 
 void manualTest(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr) {
+
     for(size_t i = 0; i < input.size(); i ++) {
-        int key = input[i];
-        RecordId rid; rid.page_number = key; rid.slot_number = key; 
-        index.insertEntry((void*)&key, rid);
+        if(datatype == INTEGER) {
+            int key = i*2;
+            RecordId rid; rid.page_number = i; rid.slot_number = i; 
+            index.insertEntry((void*)&key, rid);
+        }
+        else if(datatype == DOUBLE) {
+            double key = i*2;
+            RecordId rid; rid.page_number = i; rid.slot_number = i; 
+            index.insertEntry((void*)&key, rid);
+        }
+        else if(datatype == STRING){
+            char key[15];
+            snprintf(key, 14, "%d_string_padding", (int)i);
+            printf("%s\n", key);
+            RecordId rid; rid.page_number = i; rid.slot_number = i; 
+            index.insertEntry((void*)&key, rid);
+        }
     }
+
     index.dumpAllLevels();
     char cmd;
     int arg;
     while(std::cin>>cmd) {
         if(cmd == 'i') {
-            std::cin>>arg;
-            int key = arg;
-            RecordId rid;
-            rid.page_number = arg;
-            rid.slot_number = arg;
-            index.insertEntry((void*)&key, rid);
+            if(datatype == INTEGER) {
+                std::cin>>arg;
+                int key = arg;
+                RecordId rid;
+                rid.page_number = arg;
+                rid.slot_number = arg;
+                index.insertEntry((void*)&key, rid);
+            }
+            else if(datatype == DOUBLE) {
+                double key;
+                std::cin>>key;
+                RecordId rid;
+                rid.page_number = arg;
+                rid.slot_number = arg;
+                index.insertEntry((void*)&key, rid);
+            }
+            else if(datatype == STRING){
+                std::string str;
+                std::cin>>str;
+                char key[15];
+                snprintf(key, 14, "%s__padding", str.c_str());
+                printf("%s\n", key);
+                RecordId rid; rid.page_number = arg; rid.slot_number = arg; 
+                index.insertEntry((void*)&key, rid);
+            }
         }
         else if(cmd == 'd') {
             std::cin>>arg;
