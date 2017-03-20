@@ -74,7 +74,7 @@ namespace badgerdb
                     }
                 }
 
-                if(i != node->usage && highKey >= node->pageKeyPairArray[i].key) {
+                if(i != node->usage && !smallerThan(highKey, node->pageKeyPairArray[i].key)) {
                     printf("Child Page #%d highKey >= parent rhs key\n", childPageNo);
                     std::cout<<"highKey: "<<highKey<<", parent rhs key: "<<node->pageKeyPairArray[i].key<<"\n";
                     throw ValidationFailedException();

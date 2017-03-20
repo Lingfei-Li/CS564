@@ -67,20 +67,20 @@ namespace badgerdb
                         printf("internal node redistribute with left sib\n");
 
                         PageId insertionPageNo = sibNode->pageKeyPairArray[sibNode->usage].pageNo;
-                        T insertionKey = parentNode->pageKeyPairArray[keyIndexAtParent].key;
                         PageKeyPair<T> pageKeyPair;
-                        pageKeyPair.set( insertionPageNo, insertionKey );
+                        pageKeyPair.set( insertionPageNo, parentNode->pageKeyPairArray[keyIndexAtParent].key);
 
                         //Shift all elements to right in curNode
                         node->usage ++;
                         for(int j = node->usage; j > 0; j -- ){
-                            node->pageKeyPairArray[j] = node->pageKeyPairArray[j-1];
+                            node->pageKeyPairArray[j].pageNo = node->pageKeyPairArray[j-1].pageNo;
+                            assignKey(node->pageKeyPairArray[j].key, node->pageKeyPairArray[j-1].key);
                         }
 
-                        node->pageKeyPairArray[0] = pageKeyPair;
+                        node->pageKeyPairArray[0].pageNo = pageKeyPair.pageNo;
+                        assignKey(node->pageKeyPairArray[0].key, pageKeyPair.key);
 
                         //update parent with the last key from sib. 
-//                        parentNode->pageKeyPairArray[keyIndexAtParent].key = sibNode->pageKeyPairArray[sibNode->usage-1].key;
                         assignKey(parentNode->pageKeyPairArray[keyIndexAtParent].key, 
                                 sibNode->pageKeyPairArray[sibNode->usage-1].key);
 
@@ -96,21 +96,19 @@ namespace badgerdb
 
                         printf("internal node merge with left sib\n");
 
-                        T keyFromParent = parentNode->pageKeyPairArray[keyIndexAtParent].key;
-                        deleteEntryFromNonLeaf(keyIndexAtParent, parentNode);       //delete the key and rhs page ptr
-
                         //insert the keyFromParent (k_) to the last pos
                         //      k1      k2      k_
                         //  p1      p2      p3
-//                        sibNode->pageKeyPairArray[sibNode->usage].key = keyFromParent;
-                        assignKey(sibNode->pageKeyPairArray[sibNode->usage].key, keyFromParent);
+                        assignKey(sibNode->pageKeyPairArray[sibNode->usage].key, parentNode->pageKeyPairArray[keyIndexAtParent].key);
                         sibNode->usage ++;
+                        deleteEntryFromNonLeaf(keyIndexAtParent, parentNode);       //delete the key and rhs page ptr
 
                         //insert the pageKeyPair from current node to sib
                         //      k1      k2      k_      k'1     k'2
                         //  p1      p2      p4      p'1     p'2     p'3
                         for(int i = 0; i < node->usage; i ++) {
-                            sibNode->pageKeyPairArray[sibNode->usage] = node->pageKeyPairArray[i];
+                            sibNode->pageKeyPairArray[sibNode->usage].pageNo = node->pageKeyPairArray[i].pageNo;
+                            assignKey(sibNode->pageKeyPairArray[sibNode->usage].key, node->pageKeyPairArray[i].key);
                             sibNode->usage ++;
                         }
                         sibNode->pageKeyPairArray[sibNode->usage].pageNo = node->pageKeyPairArray[node->usage].pageNo;
@@ -149,24 +147,22 @@ namespace badgerdb
 
                         printf("internal node redistribute with right sib\n");
 
-                        T insertionKey = parentNode->pageKeyPairArray[keyIndexAtParent+1].key;
                         PageId insertionPageNo = sibNode->pageKeyPairArray[0].pageNo;
 
                         //Append insertion key and pageNo
-//                        node->pageKeyPairArray[node->usage].key = insertionKey;
-                        assignKey(node->pageKeyPairArray[node->usage].key, insertionKey);
+                        assignKey(node->pageKeyPairArray[node->usage].key, parentNode->pageKeyPairArray[keyIndexAtParent+1].key);
 
                         node->pageKeyPairArray[node->usage+1].pageNo = insertionPageNo;
                         node->usage ++;
 
                         //update parent with the first key from sib. 
-//                        parentNode->pageKeyPairArray[keyIndexAtParent+1].key = sibNode->pageKeyPairArray[0].key;
                         assignKey(parentNode->pageKeyPairArray[keyIndexAtParent+1].key, 
                                 sibNode->pageKeyPairArray[0].key);
 
                         //shift all elements in sib to left
                         for(int i = 0; i < sibNode->usage; i ++) {
-                            sibNode->pageKeyPairArray[i] = sibNode->pageKeyPairArray[i+1];
+                            sibNode->pageKeyPairArray[i].pageNo = sibNode->pageKeyPairArray[i+1].pageNo;
+                            assignKey(sibNode->pageKeyPairArray[i].key, sibNode->pageKeyPairArray[i+1].key);
                         }
                         //shrink sib page
                         sibNode->usage --;
@@ -188,23 +184,21 @@ namespace badgerdb
 
                         printf("internal node merge with right sib\n");
 
-                        T keyFromParent = parentNode->pageKeyPairArray[keyIndexAtParent+1].key;
-                        deleteEntryFromNonLeaf(keyIndexAtParent+1, parentNode);       //delete the key and rhs page ptr
-
                         //Status of curNode:
                         //insert the key from parent to cur node
                         //      k1      k2      k_ 
                         //  p1      p2      p3    
-//                        node->pageKeyPairArray[node->usage].key = keyFromParent;
-                        assignKey(node->pageKeyPairArray[node->usage].key, keyFromParent);
+                        assignKey(node->pageKeyPairArray[node->usage].key, parentNode->pageKeyPairArray[keyIndexAtParent+1].key);
                         node->usage ++;
+                        deleteEntryFromNonLeaf(keyIndexAtParent+1, parentNode);       //delete the key and rhs page ptr
 
                         //Status of curNode:
                         //insert the pageKeyPair from sib to cur node
                         //      k1      k2      k_      k'1     k'2
                         //  p1      p2      p3      p'1     p'2     p'3
                         for(int i = 0; i < sibNode->usage; i ++) {
-                            node->pageKeyPairArray[node->usage] = sibNode->pageKeyPairArray[i];
+                            node->pageKeyPairArray[node->usage].pageNo = sibNode->pageKeyPairArray[i].pageNo;
+                            assignKey(node->pageKeyPairArray[node->usage].key, sibNode->pageKeyPairArray[i].key);
                             node->usage ++;
                         }
                         node->pageKeyPairArray[node->usage].pageNo = sibNode->pageKeyPairArray[sibNode->usage].pageNo;
@@ -244,8 +238,9 @@ namespace badgerdb
                     //Redistribute/Merge with left sibling except leftmost node
                 
                     Page* sibPage = NULL;
-                    this->bufMgr->readPage(this->file, node->leftSibPageNo, sibPage);
-                    pinnedPage.push(node->leftSibPageNo);
+                    PageId sibPageNo = parentNode->pageKeyPairArray[keyIndexAtParent].pageNo;  
+                    this->bufMgr->readPage(this->file, sibPageNo, sibPage);
+                    pinnedPage.push(sibPageNo);
                     LeafNode<T>* sibNode = (LeafNode<T>*)sibPage;
 
                     if(sibNode->usage > this->leafOccupancy/2) {
@@ -258,7 +253,6 @@ namespace badgerdb
                         insertEntryInLeaf<T>(ridKeyPair.key, ridKeyPair.rid, node);
 
                         //Update the key of parent
-//                        parentNode->pageKeyPairArray[keyIndexAtParent].key = ridKeyPair.key;
                         assignKey(parentNode->pageKeyPairArray[keyIndexAtParent].key, ridKeyPair.key);
 
                         //All Done
@@ -267,7 +261,8 @@ namespace badgerdb
                         //Merge into left sibling
                         printf("leaf merge with left sib\n");
                         for(int i = 0; i < node->usage; i ++) {
-                            sibNode->ridKeyPairArray[sibNode->usage] = node->ridKeyPairArray[i];
+                            sibNode->ridKeyPairArray[sibNode->usage].rid = node->ridKeyPairArray[i].rid;
+                            assignKey(sibNode->ridKeyPairArray[sibNode->usage].key, node->ridKeyPairArray[i].key);
                             sibNode->usage ++;
                         }
 
@@ -277,20 +272,13 @@ namespace badgerdb
 
                         //Set left and right sib pointers
                         sibNode->rightSibPageNo = node->rightSibPageNo;
-                        if(node->rightSibPageNo != 0) {
-                            Page* rightSibPage = NULL;
-                            this->bufMgr->readPage(this->file, node->rightSibPageNo, rightSibPage);
-                            LeafNode<T>* rightSibNode = (LeafNode<T>*)rightSibPage;
-                            rightSibNode->leftSibPageNo = node->leftSibPageNo;
-                            this->bufMgr->unPinPage(this->file, node->rightSibPageNo, true);
-                        }
 
                         //Dispose curPage
                         disposePageNo.push_back(curPageNo);
 
                         //Return. Parent will handle its own redistribution/merging
                     }
-                    this->bufMgr->unPinPage(this->file, node->leftSibPageNo, true);
+                    this->bufMgr->unPinPage(this->file, sibPageNo, true);
                     pinnedPage.pop();
                 }
                 else {
@@ -304,16 +292,20 @@ namespace badgerdb
                         //Redistribute
                         printf("special: leaf redistribute with right sib\n");
                         int redistFromPos = 0;
-                        RIDKeyPair<T> ridKeyPair = sibNode->ridKeyPairArray[redistFromPos];
+                        RIDKeyPair<T> ridKeyPair;
+                        ridKeyPair.rid = sibNode->ridKeyPairArray[redistFromPos].rid;
+                        assignKey(ridKeyPair.key, sibNode->ridKeyPairArray[redistFromPos].key);
+
                         deleteEntryFromLeaf<T>(ridKeyPair.key, sibNode);
 
-                        node->ridKeyPairArray[node->usage] = ridKeyPair;
+                        node->ridKeyPairArray[node->usage].rid = ridKeyPair.rid;
+                        assignKey(node->ridKeyPairArray[node->usage].key, ridKeyPair.key);
+
                         node->usage ++;
 
                         //Update the key of parent
                         //Since curNode is the leftmost, its right sibling must have the same parent
                         //The position of key to be updated is the index of the key of curNode + 1
-//                        parentNode->pageKeyPairArray[keyIndexAtParent+1].key = sibNode->ridKeyPairArray[0].key;
                         assignKey(parentNode->pageKeyPairArray[keyIndexAtParent+1].key, 
                                 sibNode->ridKeyPairArray[0].key);
 
@@ -323,7 +315,8 @@ namespace badgerdb
                         //Sibling merges into curNode
                         printf("special: leaf merge with right sib\n");
                         for(int i = 0; i < sibNode->usage; i ++) {
-                            node->ridKeyPairArray[node->usage] = sibNode->ridKeyPairArray[i];
+                            node->ridKeyPairArray[node->usage].rid = sibNode->ridKeyPairArray[i].rid;
+                            assignKey(node->ridKeyPairArray[node->usage].key, sibNode->ridKeyPairArray[i].key);
                             node->usage ++;
                         }
                         //Delete sibling's key from parent
@@ -332,15 +325,6 @@ namespace badgerdb
                         
                         //Set left and right sib pointers
                         node->rightSibPageNo = sibNode->rightSibPageNo;
-
-                        Page* rightSibSibPage = NULL;
-                        PageId rightSibSibPageNo = sibNode->rightSibPageNo;
-                        if(rightSibSibPageNo != 0) {
-                            this->bufMgr->readPage(this->file, rightSibSibPageNo, rightSibSibPage);
-                            LeafNode<T>* rightSibSibNode = (LeafNode<T>*)rightSibSibPage;
-                            rightSibSibNode->leftSibPageNo = curPageNo;
-                            this->bufMgr->unPinPage(this->file, rightSibSibPageNo, true);
-                        }
 
                         //Dispose right sibling
                         disposePageNo.push_back(sibPageNo);
@@ -373,7 +357,8 @@ namespace badgerdb
 
         //Shift all elements after this position
         for(int j = i; j < node->usage - 1; j ++){
-            node->ridKeyPairArray[j] = node->ridKeyPairArray[j+1];
+            node->ridKeyPairArray[j].rid = node->ridKeyPairArray[j+1].rid;
+            assignKey(node->ridKeyPairArray[j].key, node->ridKeyPairArray[j+1].key);
         }
 
         node->usage --;
@@ -392,7 +377,6 @@ namespace badgerdb
         for(int j = keyIndex; j < node->usage - 1; j ++){
             //Sometimes the child is the leftmost of the parent. keyIndex can be -1
             if(j >= 0) {
-//                node->pageKeyPairArray[j].key = node->pageKeyPairArray[j+1].key;
                 assignKey(node->pageKeyPairArray[j].key, node->pageKeyPairArray[j+1].key);
             }
             node->pageKeyPairArray[j+1].pageNo = node->pageKeyPairArray[j+2].pageNo;
