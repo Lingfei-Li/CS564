@@ -144,7 +144,15 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
 	 * Destructor should not throw any exceptions. All exceptions should be caught in here itself. 
 	 * */
 BTreeIndex::~BTreeIndex()
-{ }
+{ 
+    if(this->scanExecuting) {
+        this->endScan();
+    }
+
+    this->bufMgr->flushFile(this->file);
+
+    delete this->file;
+}
 
 // -----------------------------------------------------------------------------
 // BTreeIndex::insertEntry
@@ -241,6 +249,9 @@ const void BTreeIndex::scanNext(RecordId& outRid)
 //
 const void BTreeIndex::endScan() 
 {
+    if(this->scanExecuting == false) {
+        throw ScanNotInitializedException();
+    }
     this->bufMgr->unPinPage(this->file, this->currentPageNum, false);
 	this->scanExecuting = false;
 }

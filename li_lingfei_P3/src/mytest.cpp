@@ -170,6 +170,12 @@ void testDeletion(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr) {
 
 void testScan(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr, int low, int high) {
 
+    try {
+        index.endScan();
+        printf("Error: endScan should throw ScanNotInitializedException\n");
+        return;
+    } catch(ScanNotInitializedException ex){ }
+
     insertEntries(input, index, bufMgr);
 
     index.dumpAllLevels();
