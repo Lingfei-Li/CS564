@@ -28,7 +28,7 @@ struct RECORD {
 
 struct TestFailException {};
 
-const char* padding = "                 ";
+const char* padding = "stringrecord";
 
 void createRelation(const std::string& relationName, Datatype datatype, std::vector<int>& input);
 

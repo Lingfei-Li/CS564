@@ -64,9 +64,16 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
     } else if(attrType == STRING) {
         this->leafOccupancy = STRINGARRAYLEAFSIZE;
         this->nodeOccupancy = STRINGARRAYNONLEAFSIZE;
+        dprintf("sizeof pageno key pair: %d\n", sizeof(PageKeyPair<char*>));
+        dprintf("sizeof internal node: %d\n", sizeof(NonLeafNode<char*>));
+
+        dprintf("sizeof rid key pair: %d\n", sizeof(RIDKeyPair<char*>));
+        dprintf("sizeof leaf node: %d\n", sizeof(LeafNode<char*>));
     }
 
     dprintf("Node and leaf occupancy: %d, %d\n", this->nodeOccupancy, this->leafOccupancy);
+
+    dprintf("offset of sibling %d\n", offsetof(LeafNode<char*>, rightSibPageNo));
 
     //Open or create the index file
     if(File::exists(indexName)) {
@@ -213,11 +220,12 @@ const void BTreeIndex::insertEntry(const void *key, const RecordId rid)
         this->createNewRoot<double>(ret);
     }
     else {
-        char truncatedKey[11];
+        char truncatedKey[STRINGSIZE+1];
         assignKey(truncatedKey, (char*)key);
         PageKeyPair<char*> ret = this->insertEntry_helper((char*)truncatedKey, rid, this->rootPageNum, 0);
         this->createNewRoot<char*>(ret);
     }
+    this->dumpAllLevels();
 }
 
 template<class T>
@@ -236,13 +244,14 @@ const PageKeyPair<T> BTreeIndex::insertEntry_helper(T key, const RecordId rid, P
         //Split
         if(node->usage == this->leafOccupancy) {
             dprintf("splitting...\n");
+            this->dumpAllLevels();
             PageId newPageNo;
             Page* newPage;
             this->bufMgr->allocPage(this->file, newPageNo, newPage);
             LeafNode<T>* newNode = (LeafNode<T>*)newPage;
             dprintf("new leaf: %d\n", newPageNo);
 
-            //redistribute
+            //redistribute with the full leaf node
             int cnt = 0;
             for(int i = this->leafOccupancy/2; i < this->leafOccupancy; i ++) {
                 //newNode is rhs, node is lhs
@@ -250,7 +259,6 @@ const PageKeyPair<T> BTreeIndex::insertEntry_helper(T key, const RecordId rid, P
                 assignKey(newNode->ridKeyPairArray[cnt].key, node->ridKeyPairArray[i].key);
                 cnt ++;
             }
-
 
             //set usage
             newNode->usage = cnt;
@@ -268,17 +276,26 @@ const PageKeyPair<T> BTreeIndex::insertEntry_helper(T key, const RecordId rid, P
         }
     }
     else {
+        //Normal case: internal node
         NonLeafNode<T>* node = (NonLeafNode<T>*)curPage;
+
+        //Find the position
         int i;
         for(i = 0; i < node->usage; i ++ ){
             if(smallerThan(key, node->pageKeyPairArray[i].key)) {
                 break;
             }
         }
+
+        //Recursive call to insert the entry in child
         PageId childPageNo = node->pageKeyPairArray[i].pageNo;
         PageKeyPair<T> pushUp = this->insertEntry_helper(key, rid, childPageNo, level + 1);
+
+        //Insert the copy-up entry
         if(pushUp.pageNo != 0) {
             insertEntryInNonLeaf(pushUp.key, pushUp.pageNo, node);
+
+            //Split
             if(node->usage == this->nodeOccupancy) {
                 PageId newPageNo;
                 Page* newPage;
@@ -356,6 +373,8 @@ const void BTreeIndex::insertEntryInLeaf(T key, const RecordId rid, LeafNode<T>*
 
     node->ridKeyPairArray[i].rid = rid;
     assignKey(node->ridKeyPairArray[i].key, key);
+
+    dprintf("right sib: %d\n", node->rightSibPageNo);
 
     node->usage ++;
 }
@@ -577,6 +596,7 @@ const bool BTreeIndex::deleteEntry(const void *key)
     std::vector<PageId> disposePageNo;
     bool result = true;
 
+
     try {
         if(this->attributeType == INTEGER) {
             this->deleteEntry_helper<int>(*(int*)key, this->rootPageNum, NULL, -2, 0, disposePageNo, pinnedPage);
@@ -586,8 +606,7 @@ const bool BTreeIndex::deleteEntry(const void *key)
         }
         else {
             char truncatedKey[11];
-            snprintf(truncatedKey, 10, "%s", (char*)key);
-            truncatedKey[10] = '\0';
+            assignKey(truncatedKey, (char*)key);
             this->deleteEntry_helper<char*>(truncatedKey, this->rootPageNum, NULL, -2, 0, disposePageNo, pinnedPage);
         }
     }
@@ -606,7 +625,7 @@ const bool BTreeIndex::deleteEntry(const void *key)
         try{
             this->bufMgr->disposePage(this->file, disposePageNo[i]);
         }catch(InvalidPageException e) {
-
+            //The provided BlobFile class doesn't support dispose operation.
         }
     }
 

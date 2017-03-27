@@ -60,7 +60,7 @@ std::string dbRecord1;
 
 std::vector<int> insertedKeysInt;
 std::vector<double> insertedKeysDouble;
-std::vector<char*> insertedKeysStr;
+std::vector<std::string> insertedKeysStr;
 
 BufMgr * bufMgr = new BufMgr(100);
 
@@ -93,6 +93,7 @@ void negtest3();
 void errorTests();
 void deleteRelation();
 void checkDeletionPassFail(bool result, int line);
+void checkDeletionPassFail1(bool result, int line, size_t index);
 
 int main(int argc, char **argv)
 {
@@ -289,8 +290,8 @@ void createRelationForward()
     record1.d = (double)i;
     std::string new_data(reinterpret_cast<char*>(&record1), sizeof(record1));
 
-    insertedKeysInt.push_back((double)i);
-    insertedKeysDouble.push_back(i);
+    insertedKeysInt.push_back(record1.i);
+    insertedKeysDouble.push_back(record1.d);
     insertedKeysStr.push_back(record1.s);
 
 		while(1)
@@ -342,8 +343,8 @@ void createRelationForwardNegative()
     record1.d = (double)(i-relationSize);
     std::string new_data(reinterpret_cast<char*>(&record1), sizeof(record1));
 
-    insertedKeysInt.push_back((double)i);
-    insertedKeysDouble.push_back(i);
+    insertedKeysInt.push_back(record1.i);
+    insertedKeysDouble.push_back(record1.d);
     insertedKeysStr.push_back(record1.s);
 
 		while(1)
@@ -397,8 +398,8 @@ void createRelationBackward()
     record1.i = i;
     record1.d = (double)i;
 
-    insertedKeysInt.push_back((double)i);
-    insertedKeysDouble.push_back(i);
+    insertedKeysInt.push_back(record1.i);
+    insertedKeysDouble.push_back(record1.d);
     insertedKeysStr.push_back(record1.s);
 
     std::string new_data(reinterpret_cast<char*>(&record1), sizeof(RECORD));
@@ -448,8 +449,8 @@ void createRelationBackwardNegative()
     record1.i = i-relationSize;
     record1.d = (double)(i-relationSize);
 
-    insertedKeysInt.push_back((double)i);
-    insertedKeysDouble.push_back(i);
+    insertedKeysInt.push_back(record1.i);
+    insertedKeysDouble.push_back(record1.d);
     insertedKeysStr.push_back(record1.s);
 
     std::string new_data(reinterpret_cast<char*>(&record1), sizeof(RECORD));
@@ -789,6 +790,17 @@ void intTestsNegative()
 	checkPassFail(intScan(&index,-1001,GT,996,LT), 1996)
 	checkPassFail(intScan(&index,-400,GT,300,LT), 699)
 	checkPassFail(intScan(&index,-4000,GTE,3000,LT), 7000)
+
+    for(size_t i = 0; i < insertedKeysInt.size(); i ++) {
+        checkDeletionPassFail(index.deleteEntry((void*)&insertedKeysInt[i]), __LINE__);
+    }
+
+    if(index.isEmpty() == false) {
+        std::cout << "\nDeletion failed at line no:" << __LINE__ << "\n";
+        std::cout << "\nEntries left in the index" << __LINE__ << "\n";
+        exit(1);
+    }
+    std::cout << "\nDeletion passed at line no:" << __LINE__ << "\n";
 }
 
 
@@ -868,6 +880,17 @@ void doubleTests()
 	checkPassFail(doubleScan(&index,0,GT,1,LT), 0)
 	checkPassFail(doubleScan(&index,300,GT,400,LT), 99)
 	checkPassFail(doubleScan(&index,3000,GTE,4000,LT), 1000)
+
+    for(size_t i = 0; i < insertedKeysDouble.size(); i ++) {
+        checkDeletionPassFail(index.deleteEntry((void*)&insertedKeysDouble[i]), __LINE__);
+    }
+
+    if(index.isEmpty() == false) {
+        std::cout << "\nDeletion failed at line no:" << __LINE__ << "\n";
+        std::cout << "\nEntries left in the index" << __LINE__ << "\n";
+        exit(1);
+    }
+    std::cout << "\nDeletion passed at line no:" << __LINE__ << "\n";
 }
 
 void doubleTestsNegative()
@@ -896,6 +919,17 @@ void doubleTestsNegative()
 	checkPassFail(doubleScan(&index,-1001,GT,996,LT), 1996)
 	checkPassFail(doubleScan(&index,-400,GT,300,LT), 699)
 	checkPassFail(doubleScan(&index,-4000,GTE,3000,LT), 7000)
+
+    for(size_t i = 0; i < insertedKeysDouble.size(); i ++) {
+        checkDeletionPassFail(index.deleteEntry((void*)&insertedKeysDouble[i]), __LINE__);
+    }
+
+    if(index.isEmpty() == false) {
+        std::cout << "\nDeletion failed at line no:" << __LINE__ << "\n";
+        std::cout << "\nEntries left in the index" << __LINE__ << "\n";
+        exit(1);
+    }
+    std::cout << "\nDeletion passed at line no:" << __LINE__ << "\n";
 }
 
 int doubleScan(BTreeIndex * index, double lowVal, Operator lowOp, double highVal, Operator highOp)
@@ -974,6 +1008,19 @@ void stringTests()
 	checkPassFail(stringScan(&index,0,GT,1,LT), 0)
 	checkPassFail(stringScan(&index,300,GT,400,LT), 99)
 	checkPassFail(stringScan(&index,3000,GTE,4000,LT), 1000)
+
+    for(size_t i = 0; i < insertedKeysStr.size(); i ++) {
+        char key[20];
+        sprintf(key, "%05d string record", (int)i);
+        checkDeletionPassFail1(index.deleteEntry((void*)key), __LINE__, i);
+    }
+
+    if(index.isEmpty() == false) {
+        std::cout << "\nDeletion failed at line no:" << __LINE__ << "\n";
+        std::cout << "\nEntries left in the index" << __LINE__ << "\n";
+        exit(1);
+    }
+    std::cout << "\nDeletion passed at line no:" << __LINE__ << "\n";
 }
 
 int stringScan(BTreeIndex * index, int lowVal, Operator lowOp, int highVal, Operator highOp)
@@ -1179,6 +1226,19 @@ void checkDeletionPassFail(bool result, int line) {
         std::cout<<"Deletion failed. Key not found.\n";
         std::cout<<"Line "<<line;
         std::cout<<std::endl;
+        exit(1);
+    }
+}
+void checkDeletionPassFail1(bool result, int line, size_t index) {
+    if(result == false) {
+        std::cout<<"Deletion failed. Key not found.\n";
+        std::cout<<"Line "<<line;
+        std::cout<<"\nIndex: "<<index;
+        std::cout<<"\nint key: "<<insertedKeysInt[index];
+        std::cout<<"\ndouble key: "<<insertedKeysDouble[index];
+        std::cout<<"\nstring key: "<<insertedKeysStr[index];
+        std::cout<<std::endl;
+
         exit(1);
     }
 }

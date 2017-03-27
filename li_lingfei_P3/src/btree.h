@@ -104,7 +104,6 @@ public:
 	T key;
 
     PageKeyPair(): pageNo(0) { }
-    PageKeyPair(PageId p): pageNo(p) { }
 
 	void set( int p, T k)
 	{
@@ -121,7 +120,6 @@ public:
 	char key[STRINGSIZE+1];
 
     PageKeyPair(): pageNo(0) { }
-    PageKeyPair(PageId p): pageNo(p) { }
 
 	void set( int p, char* k)
 	{
@@ -148,42 +146,41 @@ bool operator<( const RIDKeyPair<T>& r1, const RIDKeyPair<T>& r2 )
 }
 
 
-
 /**
  * @brief Number of key slots in B+Tree leaf for INTEGER key.
  */
-//                                               sibling ptr      usage              key               rid
-const  int INTARRAYLEAFSIZE = ( Page::SIZE - sizeof( PageId ) - sizeof(int) ) / ( sizeof( int ) + sizeof( RecordId ) );
+//                                               sibling ptr      usage              RIDKeyPair
+const  int INTARRAYLEAFSIZE = ( Page::SIZE - sizeof( PageId ) - sizeof(int) ) / ( sizeof(RIDKeyPair<int>) );
 
 /**
  * @brief Number of key slots in B+Tree leaf for DOUBLE key.
  */
-//                                                 sibling ptr      usage              key               rid
-const  int DOUBLEARRAYLEAFSIZE = ( Page::SIZE - sizeof( PageId ) - sizeof(int) ) / ( sizeof( double ) + sizeof( RecordId ) );
+//                                                 sibling ptr      usage              RIDKeyPair
+const  int DOUBLEARRAYLEAFSIZE = ( Page::SIZE - sizeof( PageId ) - sizeof(int) ) / ( sizeof(RIDKeyPair<double>) );
 
 /**
  * @brief Number of key slots in B+Tree leaf for STRING key.
  */
-//                                                 sibling ptr        usage                  key                   rid
-const  int STRINGARRAYLEAFSIZE = ( Page::SIZE - sizeof( PageId ) - sizeof(int) ) / ( (STRINGSIZE+1) * sizeof(char) + sizeof( RecordId ) );
+//                                                 sibling ptr        usage                  RIDKeyPair
+const  int STRINGARRAYLEAFSIZE = ( Page::SIZE - sizeof( PageId ) - sizeof(int) ) / ( sizeof(RIDKeyPair<char*>) );
 
 /**
  * @brief Number of key slots in B+Tree non-leaf for INTEGER key.
  */
-//                                                     level     usage                pageKeyPair
-const  int INTARRAYNONLEAFSIZE = ( Page::SIZE - sizeof( int ) - sizeof(int)) / ( sizeof(PageKeyPair<int>) ) - 1;    //-1 for the extra page ptr
+//                                                 usage                pageKeyPair
+const  int INTARRAYNONLEAFSIZE = ( Page::SIZE -  sizeof(int)) / ( sizeof(PageKeyPair<int>) ) - 1;    //-1 for the extra page ptr
 
 /**
  * @brief Number of key slots in B+Tree leaf for DOUBLE key.
  */
-//                                                        level       usage            PageKeyPair          -1 due to structure padding
-const  int DOUBLEARRAYNONLEAFSIZE = (( Page::SIZE - sizeof( int ) -  sizeof(int)) / ( sizeof(PageKeyPair<double> ) )) - 2;
+//                                                     usage            PageKeyPair          -2 due to structure padding and extra page ptr
+const  int DOUBLEARRAYNONLEAFSIZE = ( Page::SIZE - sizeof(int)) / ( sizeof(PageKeyPair<double> ) ) - 2;
 
 /**
  * @brief Number of key slots in B+Tree leaf for STRING key.
  */
-//                                                        level        extra pageNo      usage            PageKeyPair
-const  int STRINGARRAYNONLEAFSIZE = ( Page::SIZE - sizeof( int ) - sizeof( PageId ) - sizeof(int)) / ( (STRINGSIZE+1)*sizeof(char) + sizeof(PageId) ) - 1;
+//                                                   usage            PageKeyPair                          -1 for the extra page ptr
+const  int STRINGARRAYNONLEAFSIZE = ( Page::SIZE - sizeof(int)) / ( sizeof(PageKeyPair<char*>)) - 1;
 
 
 /**
@@ -379,9 +376,6 @@ class BTreeIndex {
     // Private functions
     // -----------------------------------------------------------------------------
 
-    // -----------------------------------------------------------------------------
-    // Comparators
-    // -----------------------------------------------------------------------------
     /* Relativity comparisons */
     const bool smallerThan(int lhs, int rhs) { 
         return lhs < rhs; 
@@ -409,60 +403,81 @@ class BTreeIndex {
         return smallerThan(lhs, rhs) || equals(lhs, rhs); 
     }
 
-    // -----------------------------------------------------------------------------
-    // Insertion. Implemented in btree.insertion.hpp
-    // -----------------------------------------------------------------------------
+    /**
+     * Create a new root with the copy-up entry if appropriate
+     * */
     template<class T>
 	const void createNewRoot(PageKeyPair<T>& ret);
 
+    /**
+     * Helper function for insertion. 
+     * Returns the copy-up (or push-up) key.
+     * */
     template<class T>
 	const PageKeyPair<T> insertEntry_helper(T key, const RecordId rid, PageId curPageNo, int level);
 
+    /**
+     * Inserts the key and rid to the correct position in the given leaf node
+     * */
     template<class T>
     const void insertEntryInLeaf(T key, const RecordId rid, LeafNode<T>* node);
 
+    /**
+     * Inserts the key and pageNo to the correct position in the given internal node
+     * */
     template<class T>
     const void insertEntryInNonLeaf(T key, const PageId pageNo, NonLeafNode<T>* node);
 
-    // -----------------------------------------------------------------------------
-    // Scan. Implemented in btree.scan.hpp
-    // -----------------------------------------------------------------------------
-
+    /**
+     * Helper function for startScan
+     * */
     template<class T>
 	const void startScan_helper(T lowVal, const Operator lowOp, T highVal, const Operator highOp);
 
+    /**
+     * Helper function for scanNext
+     * */
     template<class T>
     const void scanNext_helper(RecordId& outRid, T lowVal, T highVal);
 
-    // -----------------------------------------------------------------------------
-    // Deletion. Implemented in btree.delete.hpp
-    // -----------------------------------------------------------------------------
+    /**
+     * Helper function for deletion.
+     * */
     template<class T>
     const void deleteEntry_helper(T key, PageId curPageNo, NonLeafNode<T>* parentNode, 
             int keyIndexAtParent, int level, std::vector<PageId>& disposePageNo, std::set<PageId>& pinnedPage);
 
+    /**
+     * Helper function for deletion for leaf nodes. Separated from deleteEntry_helper to make the codes cleaner
+     * */
     template<class T>
     const void deleteEntry_helper_leaf(T key, PageId curPageNo, NonLeafNode<T>* parentNode, 
             int keyIndexAtParent, std::vector<PageId>& disposePageNo, std::set<PageId>& pinnedPage);
 
+    /**
+     * Delete the entry from an leaf node
+     * */
     template<class T>
     const bool deleteEntryFromLeaf(T key, LeafNode<T>* node);
 
+    /**
+     * Delete the entry from an internal node
+     * */
     template<class T>
     const void deleteEntryFromNonLeaf(const int keyIndex, NonLeafNode<T>* node);
 
-    // -----------------------------------------------------------------------------
-    // B+Tree structure Validator. Implemented in btree.validate.hpp
-    // -----------------------------------------------------------------------------
+    /*
+     * Tree structure validator helpers
+     * */
     template<class T>
     const void validate_helper(PageId curPageNo, int level, std::set<PageId>& pinnedPage);
 
     template<class T>
     const void validate_helper_leaf(PageId curPageNo, std::set<PageId>& pinnedPage);
 
-    // -----------------------------------------------------------------------------
-    // Debugging functions. Implemented in btree.cpp
-    // -----------------------------------------------------------------------------
+    /* 
+     * Debugging functions
+     * */
     template<class T>
     const void dumpLevel1(PageId curPageNo, int curLevel, int dumpLevel);
 
