@@ -12,7 +12,7 @@
 #include "string.h"
 #include <sstream>
 #include <vector>
-#include <stack>
+#include <set>
 #include <algorithm>
 
 #include "types.h"
@@ -113,6 +113,7 @@ public:
 	}
 };
 
+//Specialized template for string datatype
 template <>
 class PageKeyPair<char*>{
 public:
@@ -227,11 +228,14 @@ node they are. The level memeber of each non leaf structure seen below is set to
 at this level are just above the leaf nodes. Otherwise set to 0.
 */
 
+/**
+ * @brief Structure for all non-leaf nodes
+*/
 template<typename T>
 struct NonLeafNode {
     //                                                   usage                  PageKeyPair 
     const static int ARRAYNONLEAFSIZE = ( Page::SIZE - sizeof(int)) / ( sizeof( PageKeyPair<T>) );
-    //Note: this->nodeOccupancy will be smaller than this size
+    //Note: this is one pair larger than this->nodeOccupancy to incoporate the extra page ptr
 
     int usage = 0;
 
@@ -239,17 +243,19 @@ struct NonLeafNode {
 
 };
 
+/**
+ * @brief Structure for all leaf nodes
+ */
 template<typename T>
 struct LeafNode {
-    //                                                 sibling ptr        usage                  RIDKeyPair
-    const  static int ARRAYLEAFSIZE = ( Page::SIZE - sizeof( PageId ) - sizeof(int) ) / ( sizeof(RIDKeyPair<T>) );
+    //                                                sibling ptr        usage                  RIDKeyPair
+    const static int ARRAYLEAFSIZE = ( Page::SIZE - sizeof( PageId ) - sizeof(int) ) / ( sizeof(RIDKeyPair<T>) );
 
     int usage = 0;
 
     RIDKeyPair<T> ridKeyPairArray[ARRAYLEAFSIZE];
 
     PageId rightSibPageNo;
-
 };
 
 
@@ -368,81 +374,46 @@ class BTreeIndex {
    * High Operator. Can only be LT(<) or LTE(<=).
    */
 	Operator	highOp;
-
 	
- public:
+	// -----------------------------------------------------------------------------
+    // Private functions
+    // -----------------------------------------------------------------------------
 
-	BTreeIndex(const std::string & relationName, std::string & outIndexName,
-						BufMgr *bufMgrIn,	const int attrByteOffset,	const Datatype attrType);
-
-	~BTreeIndex();
-
-
-	const void startScan(const void* lowVal, const Operator lowOp, const void* highVal, const Operator highOp);
-
-    template<class T>
-	const void startScan_helper(T lowVal, const Operator lowOp, T highVal, const Operator highOp);
-
-	const void scanNext(RecordId& outRid);  // returned record id
-
-    template<class T>
-    const void scanNext_helper(RecordId& outRid, T lowVal, T highVal);
-
-	const void endScan();
-
-
-    /* Debugging functions */
-	const void printMeta();
-
-    const void dumpAllLevels();
-
-    const void dumpLevel(int dumpLevel);
-
-    template<class T>
-    const void dumpLevel1(PageId curPageNo, int curLevel, int dumpLevel);
-
-    template<char*>
-    const void dumpLevel1(PageId curPageNo, int curLevel, int dumpLevel);
-
-    template<class T>
-	const void dumpLeaf();
-
-    template<char*>
-	const void dumpLeaf();
-
-    /* Comparator */
+    // -----------------------------------------------------------------------------
+    // Comparators
+    // -----------------------------------------------------------------------------
     /* Relativity comparisons */
-    const bool smallerThan(int lhs, int rhs) { return lhs < rhs; }
-    const bool smallerThan(double lhs, double rhs) { return lhs < rhs; }
+    const bool smallerThan(int lhs, int rhs) { 
+        return lhs < rhs; 
+    }
+    const bool smallerThan(double lhs, double rhs) { 
+        return !equals(lhs, rhs) && (lhs < rhs);
+    }
     const bool smallerThan(char* lhs, char* rhs) { 
         return strncmp(lhs, rhs, STRINGSIZE) < 0; 
     }
 
     /* Equality comparisons */
-    const bool equals(int lhs, int rhs) { return lhs == rhs; }
-    const bool equals(double lhs, double rhs) { return fabs(lhs-rhs) < 0.00001; }
+    const bool equals(int lhs, int rhs) { 
+        return lhs == rhs; 
+    }
+    const bool equals(double lhs, double rhs) { 
+        return fabs(lhs-rhs) < 0.00001; 
+    }
     const bool equals(char* lhs, char* rhs) { 
         return strncmp(lhs, rhs, STRINGSIZE) == 0; 
     }
 
-    const bool smallerThanOrEquals(int lhs, int rhs) { 
+    template<class T>
+    const bool smallerThanOrEquals(T lhs, T rhs) { 
         return smallerThan(lhs, rhs) || equals(lhs, rhs); 
     }
-    const bool smallerThanOrEquals(double lhs, double rhs) { 
-        return smallerThan(lhs, rhs) || equals(lhs, rhs); 
-    }
-    const bool smallerThanOrEquals(char* lhs, char* rhs) { 
-        return smallerThan(lhs, rhs) || equals(lhs, rhs);
-    }
 
-    /* Insertion. Template functions are implemented in btree.insertion.hpp */
-	const void insertEntry(const void* key, const RecordId rid);
-
+    // -----------------------------------------------------------------------------
+    // Insertion. Implemented in btree.insertion.hpp
+    // -----------------------------------------------------------------------------
     template<class T>
 	const void createNewRoot(PageKeyPair<T>& ret);
-
-    template<class T>
-	const void insertEntry_template(T key, const RecordId rid);
 
     template<class T>
 	const PageKeyPair<T> insertEntry_helper(T key, const RecordId rid, PageId curPageNo, int level);
@@ -453,18 +424,26 @@ class BTreeIndex {
     template<class T>
     const void insertEntryInNonLeaf(T key, const PageId pageNo, NonLeafNode<T>* node);
 
-    /* Deletion. Template functions are implemented in btree.delete.hpp */
-    class DeletionKeyNotFoundException{ };
-
-    const bool deleteEntry(const void *key);
+    // -----------------------------------------------------------------------------
+    // Scan. Implemented in btree.scan.hpp
+    // -----------------------------------------------------------------------------
 
     template<class T>
+	const void startScan_helper(T lowVal, const Operator lowOp, T highVal, const Operator highOp);
+
+    template<class T>
+    const void scanNext_helper(RecordId& outRid, T lowVal, T highVal);
+
+    // -----------------------------------------------------------------------------
+    // Deletion. Implemented in btree.delete.hpp
+    // -----------------------------------------------------------------------------
+    template<class T>
     const void deleteEntry_helper(T key, PageId curPageNo, NonLeafNode<T>* parentNode, 
-            int keyIndexAtParent, int level, std::vector<PageId>& disposePageNo, std::stack<PageId>& pinnedPage);
+            int keyIndexAtParent, int level, std::vector<PageId>& disposePageNo, std::set<PageId>& pinnedPage);
 
     template<class T>
     const void deleteEntry_helper_leaf(T key, PageId curPageNo, NonLeafNode<T>* parentNode, 
-            int keyIndexAtParent, std::vector<PageId>& disposePageNo, std::stack<PageId>& pinnedPage);
+            int keyIndexAtParent, std::vector<PageId>& disposePageNo, std::set<PageId>& pinnedPage);
 
     template<class T>
     const bool deleteEntryFromLeaf(T key, LeafNode<T>* node);
@@ -472,24 +451,159 @@ class BTreeIndex {
     template<class T>
     const void deleteEntryFromNonLeaf(const int keyIndex, NonLeafNode<T>* node);
 
+    // -----------------------------------------------------------------------------
+    // B+Tree structure Validator. Implemented in btree.validate.hpp
+    // -----------------------------------------------------------------------------
+    template<class T>
+    const void validate_helper(PageId curPageNo, int level, std::set<PageId>& pinnedPage);
 
-    /* B+Tree structure Validator. Template functions are implemented in btree.validate.hpp */
+    template<class T>
+    const void validate_helper_leaf(PageId curPageNo, std::set<PageId>& pinnedPage);
+
+    // -----------------------------------------------------------------------------
+    // Debugging functions. Implemented in btree.cpp
+    // -----------------------------------------------------------------------------
+    template<class T>
+    const void dumpLevel1(PageId curPageNo, int curLevel, int dumpLevel);
+
+    template<char*>
+    const void dumpLevel1(PageId curPageNo, int curLevel, int dumpLevel);
+
+    template<class T>
+	const void dumpLeaf();
+
+    template<char*>
+	const void dumpLeaf();
+
+    const void dumpLevel(int dumpLevel);
+
+	
+ public:
+
+    // -----------------------------------------------------------------------------
+    // Constructor / Destructor and helpers
+    // -----------------------------------------------------------------------------
+	/**
+   * BTreeIndex Constructor. 
+	 * Check to see if the corresponding index file exists. If so, open the file.
+	 * If not, create it and insert entries for every tuple in the base relation using FileScan class.
+   *
+   * @param relationName        Name of file.
+   * @param outIndexName        Return the name of index file.
+   * @param bufMgrIn						Buffer Manager Instance
+   * @param attrByteOffset			Offset of attribute, over which index is to be built, in the record
+   * @param attrType						Datatype of attribute over which index is built
+   * @throws  BadIndexInfoException     If the index file already exists for the corresponding attribute, but values in metapage(relationName, attribute byte offset, attribute type etc.) do not match with values received through constructor parameters.
+   */
+	BTreeIndex(const std::string& relationName, std::string& outIndexName,
+						BufMgr* bufMgrIn, const int attrByteOffset, const Datatype attrType);
+
+    const void createIndexFromRelation(const std::string& relationName);
+
+	/**
+   * BTreeIndex Destructor. 
+	 * End any initialized scan, flush index file, after unpinning any pinned pages, from the buffer manager
+	 * and delete file instance thereby closing the index file.
+	 * Destructor should not throw any exceptions. All exceptions should be caught in here itself. 
+	 * */
+	~BTreeIndex();
+
+
+    /**
+	 * Insert a new entry using the pair <value,rid>. 
+	 * Start from root to recursively find out the leaf to insert the entry in. The insertion may cause splitting of leaf node.
+	 * This splitting will require addition of new leaf page number entry into the parent non-leaf, which may in-turn get split.
+	 * This may continue all the way upto the root causing the root to get split. If root gets split, metapage needs to be changed accordingly.
+	 * Make sure to unpin pages as soon as you can.
+   * @param key			Key to insert, pointer to integer/double/char string
+   * @param rid			Record ID of a record whose entry is getting inserted into the index.
+	**/
+	const void insertEntry(const void* key, const RecordId rid);
+
+	
+	/**
+	 * Begin a filtered scan of the index.  For instance, if the method is called 
+	 * using ("a",GT,"d",LTE) then we should seek all entries with a value 
+	 * greater than "a" and less than or equal to "d".
+	 * If another scan is already executing, that needs to be ended here.
+	 * Set up all the variables for scan. Start from root to find out the leaf page that contains the first RecordID
+	 * that satisfies the scan parameters. Keep that page pinned in the buffer pool.
+   * @param lowVal	Low value of range, pointer to integer / double / char string
+   * @param lowOp		Low operator (GT/GTE)
+   * @param highVal	High value of range, pointer to integer / double / char string
+   * @param highOp	High operator (LT/LTE)
+   * @throws  BadOpcodesException If lowOp and highOp do not contain one of their their expected values 
+   * @throws  BadScanrangeException If lowVal > highval
+	 * @throws  NoSuchKeyFoundException If there is no key in the B+ tree that satisfies the scan criteria.
+	**/
+	const void startScan(const void* lowVal, const Operator lowOp, const void* highVal, const Operator highOp);
+
+	/**
+	 * Fetch the record id of the next index entry that matches the scan.
+	 * Return the next record from current page being scanned. If current page has been scanned to its entirety, move on to the right sibling of current page, if any exists, to start scanning that page. Make sure to unpin any pages that are no longer required.
+   * @param outRid	RecordId of next record found that satisfies the scan criteria returned in this
+	 * @throws ScanNotInitializedException If no scan has been initialized.
+	 * @throws IndexScanCompletedException If no more records, satisfying the scan criteria, are left to be scanned.
+	**/
+	const void scanNext(RecordId& outRid);
+
+	
+	/**
+	 * Terminate the current scan. Unpin any pinned pages. Reset scan specific variables.
+	 * @throws ScanNotInitializedException If no scan has been initialized.
+	**/
+	const void endScan();
+
+	/**
+	 * Indicates that the key is not found in the index. Deletion is terminated
+	**/
+    class DeletionKeyNotFoundException{ };
+
+	/**
+	 * Delete the given key from the index.
+	 * @param key the key to be deleted
+	 * @throws DeletionKeyNotFoundException If the key is not present in the index
+	**/
+    const bool deleteEntry(const void *key);
+
+    
+	/**
+	 * Indicates that the tree sturcture is not valid for B+-tree. Validation process is terminated
+	**/
     class ValidationFailedException{ };
-
+	
+	/**
+	 * Validate the tree structure. 
+	 * @param showInfo If true, then the information about the tree will be printed during validation. If false, the validation will execute silently until it sees invalid structure.
+	 * @throws ValidationFailedException If the tree structure is invalid
+	**/
     const bool validate(bool showInfo);
+	
+	/**
+	 * Return a boolean indicating if the tree has no entry in it
+	**/
+    const bool isEmpty();
 
-    template<class T>
-    const void validate_helper(PageId curPageNo, int level, std::stack<PageId>& pinnedPage);
+    // -----------------------------------------------------------------------------
+    // Debugging functions
+    // -----------------------------------------------------------------------------
+	/**
+	 * Print the meta info
+	**/
+	const void printMeta();
 
-    template<class T>
-    const void validate_helper_leaf(PageId curPageNo, std::stack<PageId>& pinnedPage);
+	/**
+	 * Print the given string only when DEBUG is set
+	**/
+    const int dprintf (const char *format, ...);
+
+	/**
+	 * Visualize the tree structure
+	**/
+    const void dumpAllLevels();
 
 };
 
 }
 
-#include "btree.insert.hpp"
-#include "btree.scan.hpp"
-#include "btree.delete.hpp"
-#include "btree.validate.hpp"
-#include "btree.comparator.hpp"
+

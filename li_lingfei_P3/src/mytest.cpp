@@ -20,14 +20,17 @@
 
 using namespace badgerdb;
 
-typedef struct tuple {
-	int i;
-	double d;
-	char s[64];
-} RECORD;
+struct RECORD {
+    int i;
+    double d;
+    char s[64];
+};
+
+struct TestFailException {};
 
 const char* padding = "                 ";
 
+void createRelation(const std::string& relationName, Datatype datatype, std::vector<int>& input);
 
 void testDeletion(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr);
 
@@ -43,8 +46,8 @@ Datatype datatype;
 
 int main() {
     BufMgr * bufMgr = new BufMgr(100);
-    const std::string relationName = "relation_test";
     std::string indexName;
+    std::string relationName = "rel_";
 
     std::ifstream myfile;
     myfile.open ("input");
@@ -53,16 +56,16 @@ int main() {
     myfile>>type;
     if(type == "i" || type == "int") {
         datatype = INTEGER;
+        relationName += "int_";
     }
     else if(type == "d" || type=="double"){
         datatype = DOUBLE;
+        relationName += "dbl_";
     }
     else if(type == "s" || type=="str" || type=="string"){
         datatype = STRING;
+        relationName += "str_";
     }
-
-    BTreeIndex index(relationName, indexName, bufMgr, offsetof(tuple,i), datatype);
-
 
     std::string test;
     int n;
@@ -70,20 +73,58 @@ int main() {
     std::vector<int> input;
     for(int i = 0; i < n; i ++) {
         int key = i*2;
-
         input.push_back(key);
     }
 
+    relationName += test+"_";
+    relationName += std::to_string(n);
+
+
+    if(File::exists(relationName) == false) {
+        createRelation(relationName, datatype, input);
+    }
+
+    int attrOffset = 0;
+    if(datatype == INTEGER) {
+        attrOffset = offsetof(RECORD, i);
+    }
+    else if(datatype == DOUBLE) {
+        attrOffset = offsetof(RECORD, d);
+    }
+    else if(datatype == STRING) {
+        attrOffset = offsetof(RECORD, s);
+    }
+
     if(test == "d" || test == "del" || test=="deletion") {
-        testDeletion(input, index, bufMgr);
+        int maxEpoch = 10;
+        for(int epoch = 0; epoch < maxEpoch; epoch ++) {
+            printf("Epoch %d\n", epoch);
+            if(File::exists(indexName)) {
+                File::remove(indexName);
+            }
+            BTreeIndex index(relationName, indexName, bufMgr, attrOffset, datatype);
+            try{
+                testDeletion(input, index, bufMgr);
+                printf("Deletion test passed\n");
+            } catch(TestFailException e) {
+                index.dumpAllLevels();
+                printf("Deletion test failed\n");
+                break;
+            }
+        }
     }
     else if(test == "s" || test == "scan") {
+        BTreeIndex index(relationName, indexName, bufMgr, attrOffset, datatype);
         int low, high;
         myfile>>low>>high;
         testScan(input, index, bufMgr, low, high);
     }
     else if(test == "m" || test == "manual") {
+        BTreeIndex index(relationName, indexName, bufMgr, attrOffset, datatype);
         manualTest(input, index, bufMgr);
+    }
+    else {
+    
     }
 
     myfile.close();
@@ -94,78 +135,61 @@ int main() {
 }
 
 
-void insertEntries(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr) {
-    for(size_t i = 0; i < input.size(); i ++) {
-        if(datatype == INTEGER) {
-            int key = input[i];
-            RecordId rid; rid.page_number = input[i]; rid.slot_number = input[i]; 
-            index.insertEntry((void*)&key, rid);
-        }
-        else if(datatype == DOUBLE) {
-            double key = (double)(input[i]);
-            RecordId rid; rid.page_number = input[i]; rid.slot_number = input[i]; 
-            index.insertEntry((void*)&key, rid);
-        }
-        else if(datatype == STRING){
-            char key[15];
-            snprintf(key, 14, "%d%s", input[i], padding);
-            RecordId rid; rid.page_number = input[i]; rid.slot_number = input[i]; 
-            index.insertEntry((void*)&key, rid);
-        }
+void createRelation(const std::string& relationName, Datatype datatype, std::vector<int>& input) {
+    // Create a new database file.
+    PageFile new_file = PageFile::create(relationName);
+
+    RECORD record1;
+    // Allocate some pages and put data on them.
+    for(int i = 0; i < (int)input.size(); i++) {
+        PageId new_page_number;
+        Page new_page = new_file.allocatePage(new_page_number);
+
+        int key = 2 * i;
+        snprintf(record1.s, 14, "%d%s", key, padding);
+        record1.i = key;
+        record1.d = (double)key;
+        std::string new_data(reinterpret_cast<char*>(&record1), sizeof(record1));
+
+        new_page.insertRecord(new_data);
+        new_file.writePage(new_page_number, new_page);
     }
 }
 
+
 void testDeletion(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr) {
-
-
     srand(time(0));
-    int maxEpoch = 10;
-    for(int epoch = 0; epoch < maxEpoch; epoch ++) {
-        printf("Epoch %d\n", epoch);
-        insertEntries(input, index, bufMgr);
+    std::vector<int> deletionIndex;
+    for(size_t i = 0; i < input.size(); i ++) {
+        deletionIndex.push_back(i);
+    }
+    std::random_shuffle(deletionIndex.begin(), deletionIndex.end());
 
-        std::vector<int> deletionIndex;
-        for(size_t i = 0; i < input.size(); i ++) {
-            deletionIndex.push_back(i);
+    for(size_t i = 0; i < deletionIndex.size(); i ++) {
+        if(datatype == INTEGER) {
+            int key = input[deletionIndex[i]];
+            index.dprintf("deleting %d...\n", key);
+            if(index.deleteEntry((void*)&key) == false || index.validate(false) == false) {
+                throw TestFailException();
+            }
         }
-        std::random_shuffle(deletionIndex.begin(), deletionIndex.end());
-
-        for(size_t i = 0; i < deletionIndex.size(); i ++) {
-
-//            index.dumpAllLevels();
-
-            if(datatype == INTEGER) {
-                int key = input[deletionIndex[i]];
-                printf("deleting %d...\n", key);
-                if(index.deleteEntry((void*)&key) == false || index.validate(false) == false) {
-                    index.dumpAllLevels();
-                    printf("Deletion test failed\n");
-                    return;
-                }
+        else if(datatype == DOUBLE) {
+            double key = (double)input[deletionIndex[i]];
+            index.dprintf("deleting %lf...\n", key);
+            if(index.deleteEntry((void*)&key) == false || index.validate(false) == false) {
+                throw TestFailException();
             }
-            else if(datatype == DOUBLE) {
-                double key = (double)input[deletionIndex[i]];
-                printf("deleting %lf...\n", key);
-                if(index.deleteEntry((void*)&key) == false || index.validate(false) == false) {
-                    index.dumpAllLevels();
-                    printf("Deletion test failed\n");
-                    return;
-                }
-            }
-            else if(datatype == STRING){
-                char key[15];
-                snprintf(key, 14, "%d%s", input[deletionIndex[i]], padding);
-                printf("deleting %s...\n", key);
-                if(index.deleteEntry((void*)&key) == false || index.validate(false) == false) {
-                    index.dumpAllLevels();
-                    printf("Deletion test failed\n");
-                    return;
-                }
+        }
+        else if(datatype == STRING){
+            char key[15];
+            snprintf(key, 14, "%d%s", input[deletionIndex[i]], padding);
+            index.dprintf("deleting %s...\n", key);
+            if(index.deleteEntry((void*)&key) == false || index.validate(false) == false) {
+                throw TestFailException();
             }
         }
     }
 
-    printf("Deletion test passed\n");
 }
 
 void testScan(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr, int low, int high) {
@@ -175,8 +199,6 @@ void testScan(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr, int lo
         printf("Error: endScan should throw ScanNotInitializedException\n");
         return;
     } catch(ScanNotInitializedException ex){ }
-
-    insertEntries(input, index, bufMgr);
 
     index.dumpAllLevels();
 
@@ -225,8 +247,6 @@ void testInsertion(BTreeIndex& index, BufMgr& bufMgr) {
 
 
 void manualTest(std::vector<int>& input, BTreeIndex& index, BufMgr* bufMgr) {
-
-    insertEntries(input, index, bufMgr);
 
     index.dumpAllLevels();
     char cmd;

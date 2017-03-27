@@ -11,9 +11,10 @@ LIB = lib
 #	rm -f ../relA*;\
 #	$(CC) $(CFLAGS) -I. obj/filescan.o obj/main.o obj/btree.o lib/bufmgr.a lib/exceptions.a -o badgerdb_main
 
-all: $(LIB)/bufmgr.a $(OBJ)/filescan.o $(OBJ)/mytest.o $(OBJ)/btree.o 
+all: $(LIB)/bufmgr.a $(OBJ)/filescan.o $(OBJ)/mytest.o $(OBJ)/btree.o $(OBJ)/main.o
 	rm -f ../relA*;\
 	$(CC) $(CFLAGS) -I. obj/filescan.o obj/mytest.o obj/btree.o lib/bufmgr.a lib/exceptions.a -o out.mytest 
+	$(CC) $(CFLAGS) -I. obj/filescan.o obj/main.o obj/btree.o lib/bufmgr.a lib/exceptions.a -o badgerdb_main
 
 $(LIB)/bufmgr.a: $(LIB)/exceptions.a buffer.* file.* page.* bufHashTbl.*
 	cd $(OBJ)/;\
@@ -45,8 +46,14 @@ tt:
 	./out.mytest
 
 t:
-	rm relation_test*
+	rm rel*
 	./out.mytest
+
+t0:
+	./badgerdb_main 0
+
+t1:
+	./badgerdb_main 1
 
 t2:
 	./badgerdb_main 2
@@ -62,12 +69,13 @@ clean:
 	rm -f badgerdb_main
 	rm -f out.mytest
 
-cleanall:
+ca:
 	#rm -rf $(OBJ)/exceptions/*.o
 	rm -rf $(OBJ)/*.o
 	rm -rf $(LIB)/*
 	#rm -rf exceptions/*.o
 	rm -f badgerdb_main
+	rm rel*
 
 doc:
 	doxygen Doxyfile
