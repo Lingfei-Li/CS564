@@ -1,0 +1,23 @@
+/*
+2. Print the name of the food item(s) with the highest nutrition value per 100 grams.
+*/
+
+SELECT TEMP.Long_Desc
+FROM  
+    (
+        SELECT F.Long_Desc, SUM(N.Nutr_Val) as NSUM
+        FROM FOOD_DES as F, NUT_DATA as N
+        WHERE F.NDB_No=N.NDB_No 
+        GROUP BY F.NDB_No, F.Long_Desc
+    ) AS TEMP
+WHERE TEMP.NSUM =  
+    ( 
+        SELECT MAX(NSUM2) FROM 
+        (
+            SELECT SUM(N.Nutr_Val) NSUM2
+            FROM FOOD_DES as F, NUT_DATA as N
+            WHERE F.NDB_No=N.NDB_No 
+            GROUP BY F.NDB_No
+        )
+    )
+;

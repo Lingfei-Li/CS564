@@ -1,0 +1,21 @@
+/*
+6.
+List all the food item(s) that contain “water” but do not contain “calcium”. 
+Sort the result in descending order of food group code. 
+For food items belonging to the same food group, sort them in ascending order of short description of the food item.
+*/
+
+SELECT F.NDB_No, F.Long_Desc
+FROM FOOD_DES AS F 
+WHERE F.Long_Desc IN 
+        (
+        SELECT F.Long_Desc FROM FOOD_DES AS F, NUT_DATA AS N, NUTR_DEF AS ND
+        WHERE F.NDB_No=N.NDB_No AND N.Nutr_No=ND.Nutr_No AND ND.NutrDesc='Water'
+        )
+    AND F.LONG_DESC NOT IN 
+        (
+        SELECT F.Long_Desc FROM FOOD_DES AS F, NUT_DATA AS N, NUTR_DEF AS ND
+        WHERE F.NDB_No=N.NDB_No AND N.Nutr_No=ND.Nutr_No AND ND.NutrDesc='Calcium, Ca'
+        )
+ORDER BY F.FdGrp_Cd DESC, F.Shrt_Desc
+;

@@ -1,0 +1,11 @@
+/*
+1. List the nutrition value of the nutrient 205 (205 is the unique 3-digit 
+identifier code for a nutrient) in “McDONALD'S, Hamburger”.
+*/
+
+SELECT N.Nutr_Val   
+FROM FOOD_DES as F, NUT_DATA AS N   
+WHERE F.NDB_No=N.NDB_No   
+    AND F.Long_Desc="McDONALD'S, Hamburger" 
+    AND N.Nutr_No="205" 
+;

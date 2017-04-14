@@ -1,0 +1,10 @@
+/*
+3. Write a query to generate Table 1 in the sr28_doc.pdf (you don’t need to sort it in exactly the same way as Table 1).
+*/
+
+SELECT N.Nutr_No AS "Nutr.No", ND.NutrDesc AS Nutrient, COUNT(F.NDB_No) AS Count
+FROM FOOD_DES as F, NUT_DATA AS N, NUTR_DEF AS ND
+WHERE F.NDB_No = N.NDB_No 
+    AND ND.Nutr_No = N.Nutr_No
+GROUP BY N.Nutr_No, ND.NutrDesc
+;

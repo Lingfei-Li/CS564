@@ -1,0 +1,26 @@
+/*
+7.
+Find all the food items that contain both “Caffeine” and “Alcohol, ethyl” 
+and then list both these ingredients per 100 grams of the food item.
+*/
+
+SELECT F.NDB_No, F.Long_Desc, N.Nutr_Val AS CAFFINE_VAL, N2.Nutr_Val AS ALCOHOL_VAL
+FROM FOOD_DES AS F, NUT_DATA AS N, NUTR_DEF AS ND, NUT_DATA AS N2, NUTR_DEF AS ND2
+WHERE F.Long_Desc IN 
+    (
+        SELECT F.Long_Desc FROM FOOD_DES AS F, NUT_DATA AS N, NUTR_DEF AS ND
+        WHERE F.NDB_No=N.NDB_No AND N.Nutr_No=ND.Nutr_No AND ND.NutrDesc='Caffeine'
+    )
+    AND F.LONG_DESC IN 
+    (
+        SELECT F.Long_Desc FROM FOOD_DES AS F, NUT_DATA AS N, NUTR_DEF AS ND
+        WHERE F.NDB_No=N.NDB_No AND N.Nutr_No=ND.Nutr_No AND ND.NutrDesc='Alcohol, ethyl'
+    )
+    AND F.NDB_No=N.NDB_No 
+    AND N.Nutr_No=ND.Nutr_No 
+    AND F.NDB_No=N2.NDB_No 
+    AND N2.Nutr_No=ND2.Nutr_No 
+    AND ND.NutrDesc='Caffeine'
+    AND ND2.NutrDesc='Alcohol, ethyl'
+GROUP BY F.NDB_No, F.Long_Desc, N.Nutr_Val, N2.Nutr_Val
+;

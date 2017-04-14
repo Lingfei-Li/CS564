@@ -1,0 +1,25 @@
+
+/*
+4. Print the name of the food item(s) with the highest number of nutrients in it and also print the count of the nutrients.
+*/
+
+SELECT TEMP.NAME, TEMP.CNT
+FROM 
+    (
+        SELECT COUNT(N.Nutr_No) AS CNT, F.NDB_No, F.Long_Desc AS NAME
+        FROM FOOD_DES as F, NUT_DATA AS N
+        WHERE F.NDB_No = N.NDB_No 
+        GROUP BY F.NDB_No, F.Long_Desc
+    ) AS TEMP
+WHERE TEMP.CNT = 
+    ( 
+        SELECT MAX(CNT2) 
+        FROM
+        (
+            SELECT COUNT(N.Nutr_No) AS CNT2
+            FROM FOOD_DES as F, NUT_DATA AS N
+            WHERE F.NDB_No = N.NDB_No 
+            GROUP BY F.NDB_No
+        )
+    )
+;
